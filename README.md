@@ -234,6 +234,44 @@ Contributions are welcome! Please:
 4. Ensure all tests pass: `pnpm test`
 5. Submit a pull request
 
+## Releasing
+
+This project uses [Changesets](https://github.com/changesets/changesets) for version management and changelogs.
+
+### Workflow
+
+1. **Add a changeset** after merging a PR that changes behavior:
+   ```bash
+   pnpm changeset
+   ```
+   This prompts for the version bump type (patch/minor/major) and a summary.
+
+2. **Consume changesets** when ready to release:
+   ```bash
+   pnpm version-packages
+   ```
+   This bumps `package.json` versions and updates `CHANGELOG.md`.
+
+3. **Publish to npm**:
+   ```bash
+   pnpm release
+   ```
+   This builds, runs tests, and publishes to npm.
+
+4. **Tag and push**:
+   ```bash
+   git push --follow-tags
+   gh release create v<version> --title "v<version>" --notes-file CHANGELOG.md
+   ```
+
+### Pre-release versions
+
+```bash
+# Add a changeset, edit the version in .changeset/*.md to include e.g. 0.2.0-beta.1
+pnpm version-packages
+pnpm changeset publish --tag beta
+```
+
 ## Changelog
 
 See [CHANGELOG.md](./CHANGELOG.md) for release history.
