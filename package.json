@@ -19,7 +19,7 @@
     "precheck": "./scripts/validate-prerequisites.sh",
     "dev": "tsx src/main.ts",
     "build": "tsc",
-    "prepublishOnly": "pnpm run build && pnpm run test:run",
+    "prepublishOnly": "pnpm run build",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
@@ -27,7 +27,10 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "format": "biome format --write ."
+    "format": "biome format --write .",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "pnpm run build && pnpm run test:run && pnpm changeset publish"
   },
   "keywords": [
     "github",
@@ -63,6 +66,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.0",
+    "@changesets/changelog-github": "^0.6.0",
+    "@changesets/cli": "^2.30.0",
     "@effect/vitest": "^0.12.0",
     "@types/node": "^25.5.0",
     "@vitest/coverage-v8": "^2.1.9",
