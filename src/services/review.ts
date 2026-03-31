@@ -50,3 +50,35 @@ export interface ReviewService {
  * ReviewService tag for dependency injection
  */
 export const ReviewService = Context.GenericTag<ReviewService>("@services/ReviewService");
+
+/**
+ * Command and input for claudecode CLI execution
+ */
+interface ClaudeCodeCommand {
+  readonly command: ReadonlyArray<string>;
+  readonly input: string;
+}
+
+/**
+ * Builds claudecode command array and formats PR context as markdown
+ * @internal
+ */
+export const buildClaudeCodeCommand = (
+  prContext: PRContext,
+  skillName: string
+): ClaudeCodeCommand => {
+  const command = ["claudecode", "skill", skillName];
+
+  const input = `# PR #${prContext.prNumber} Review Request
+
+**Repository:** ${prContext.repo}
+**PR Title:** ${prContext.details.title}
+
+## Changed Files
+${prContext.details.files.join("\n")}
+
+## Diff
+${prContext.diff}`;
+
+  return { command, input };
+};

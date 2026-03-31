@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Effect } from "effect";
 import type { ReviewService, PRContext } from "../../src/services/review.js";
+import { buildClaudeCodeCommand } from "../../src/services/review.js";
 import {
   AWSTokenExpiredError,
   ClaudeCodeCommandError,
@@ -41,11 +42,88 @@ describe("ReviewService", () => {
     });
   });
 
-  // Placeholder tests for upcoming tasks
+  // Tests for command builder (m3-002)
   describe("buildClaudeCodeCommand", () => {
-    it.todo("should build command array correctly");
-    it.todo("should format PR context as markdown");
-    it.todo("should handle special characters in PR title");
+    it("should build command array correctly", () => {
+      const prContext: PRContext = {
+        repo: "owner/repo",
+        prNumber: 123,
+        diff: "diff content",
+        details: {
+          number: 123,
+          title: "Test PR",
+          body: "PR description",
+          url: "https://github.com/owner/repo/pull/123",
+          state: "open",
+          author: "testuser",
+          createdAt: "2024-01-01T00:00:00Z",
+          updatedAt: "2024-01-01T00:00:00Z",
+          labels: [],
+          files: ["src/test.ts"],
+        },
+      };
+
+      const result = buildClaudeCodeCommand(prContext, "test-skill");
+
+      expect(result.command).toEqual(["claudecode", "skill", "test-skill"]);
+      expect(result.input).toBeDefined();
+    });
+
+    it("should format PR context as markdown", () => {
+      const prContext: PRContext = {
+        repo: "owner/repo",
+        prNumber: 456,
+        diff: "diff --git a/file.ts\n+added line",
+        details: {
+          number: 456,
+          title: "Add new feature",
+          body: "Description",
+          url: "https://github.com/owner/repo/pull/456",
+          state: "open",
+          author: "author",
+          createdAt: "2024-01-01T00:00:00Z",
+          updatedAt: "2024-01-01T00:00:00Z",
+          labels: ["enhancement"],
+          files: ["src/feature.ts", "tests/feature.test.ts"],
+        },
+      };
+
+      const result = buildClaudeCodeCommand(prContext, "review-skill");
+
+      expect(result.input).toContain("# PR #456 Review Request");
+      expect(result.input).toContain("**Repository:** owner/repo");
+      expect(result.input).toContain("**PR Title:** Add new feature");
+      expect(result.input).toContain("## Changed Files");
+      expect(result.input).toContain("src/feature.ts");
+      expect(result.input).toContain("tests/feature.test.ts");
+      expect(result.input).toContain("## Diff");
+      expect(result.input).toContain("diff --git a/file.ts");
+    });
+
+    it("should handle special characters in PR title", () => {
+      const prContext: PRContext = {
+        repo: "owner/repo",
+        prNumber: 789,
+        diff: "",
+        details: {
+          number: 789,
+          title: "Fix: Handle `special` chars & symbols",
+          body: "",
+          url: "https://github.com/owner/repo/pull/789",
+          state: "open",
+          author: "user",
+          createdAt: "2024-01-01T00:00:00Z",
+          updatedAt: "2024-01-01T00:00:00Z",
+          labels: [],
+          files: [],
+        },
+      };
+
+      const result = buildClaudeCodeCommand(prContext, "test");
+
+      expect(result.input).toContain("Fix: Handle `special` chars & symbols");
+      expect(result.command).toEqual(["claudecode", "skill", "test"]);
+    });
   });
 
   describe("detectAWSTokenExpiry", () => {
