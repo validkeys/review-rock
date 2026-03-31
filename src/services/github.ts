@@ -86,6 +86,32 @@ export interface GitHubService {
   ) => Effect.Effect<void, GitHubCommandError>;
 
   /**
+   * Post a comment on a pull request and return the comment ID
+   * @param repo - Repository in format "owner/repo"
+   * @param prNumber - Pull request number
+   * @param comment - Comment text to post
+   * @returns Effect that resolves to comment ID or GitHubCommandError
+   */
+  readonly postCommentWithId: (
+    repo: string,
+    prNumber: number,
+    comment: string
+  ) => Effect.Effect<number, GitHubCommandError>;
+
+  /**
+   * Update an existing comment on a pull request
+   * @param repo - Repository in format "owner/repo"
+   * @param commentId - Comment ID to update
+   * @param comment - New comment text
+   * @returns Effect that resolves to void or GitHubCommandError
+   */
+  readonly updateComment: (
+    repo: string,
+    commentId: number,
+    comment: string
+  ) => Effect.Effect<void, GitHubCommandError>;
+
+  /**
    * Get detailed information about a pull request
    * @param repo - Repository in format "owner/repo"
    * @param prNumber - Pull request number
@@ -296,6 +322,95 @@ const executePostCommentCommand = (
   });
 
 /**
+ * Helper to post a comment and return its ID using GitHub API
+ */
+const executePostCommentWithIdCommand = (
+  repo: string,
+  prNumber: number,
+  comment: string
+): Effect.Effect<number, GitHubCommandError, CommandExecutor.CommandExecutor> =>
+  Effect.gen(function* () {
+    // Use gh api to post comment and get the response with ID
+    const command = Command.make(
+      "gh",
+      "api",
+      `repos/${repo}/issues/${prNumber}/comments`,
+      "--method",
+      "POST",
+      "-f",
+      `body=${comment}`
+    );
+
+    // Run command and parse JSON response
+    const output = yield* Command.string(command).pipe(
+      Effect.mapError(
+        (error) =>
+          new GitHubCommandError({
+            command: "gh api POST comment",
+            stderr: error.message || String(error),
+            exitCode: 1,
+          })
+      )
+    );
+
+    // Parse response to get comment ID
+    try {
+      const response = JSON.parse(output);
+      if (typeof response.id === "number") {
+        return response.id;
+      }
+      return yield* Effect.fail(
+        new GitHubCommandError({
+          command: "gh api POST comment",
+          stderr: "Response missing comment id",
+          exitCode: 1,
+        })
+      );
+    } catch (error) {
+      return yield* Effect.fail(
+        new GitHubCommandError({
+          command: "gh api POST comment",
+          stderr: `Failed to parse response: ${error}`,
+          exitCode: 1,
+        })
+      );
+    }
+  });
+
+/**
+ * Helper to update an existing comment using GitHub API
+ */
+const executeUpdateCommentCommand = (
+  repo: string,
+  commentId: number,
+  comment: string
+): Effect.Effect<void, GitHubCommandError, CommandExecutor.CommandExecutor> =>
+  Effect.gen(function* () {
+    // Use gh api to update the comment
+    const command = Command.make(
+      "gh",
+      "api",
+      `repos/${repo}/issues/comments/${commentId}`,
+      "--method",
+      "PATCH",
+      "-f",
+      `body=${comment}`
+    );
+
+    // Run command
+    yield* Command.string(command).pipe(
+      Effect.mapError(
+        (error) =>
+          new GitHubCommandError({
+            command: "gh api PATCH comment",
+            stderr: error.message || String(error),
+            exitCode: 1,
+          })
+      )
+    );
+  });
+
+/**
  * Helper to parse file paths from gh JSON output
  */
 const parseFiles = (files: unknown): ReadonlyArray<string> => {
@@ -434,6 +549,14 @@ export const GitHubServiceLive = Layer.effect(
         ),
       postComment: (repo: string, prNumber: number, comment: string) =>
         executePostCommentCommand(repo, prNumber, comment).pipe(
+          Effect.provideService(CommandExecutor.CommandExecutor, executor)
+        ),
+      postCommentWithId: (repo: string, prNumber: number, comment: string) =>
+        executePostCommentWithIdCommand(repo, prNumber, comment).pipe(
+          Effect.provideService(CommandExecutor.CommandExecutor, executor)
+        ),
+      updateComment: (repo: string, commentId: number, comment: string) =>
+        executeUpdateCommentCommand(repo, commentId, comment).pipe(
           Effect.provideService(CommandExecutor.CommandExecutor, executor)
         ),
       getPRDetails: (repo: string, prNumber: number) =>
