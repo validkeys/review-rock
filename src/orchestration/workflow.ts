@@ -104,11 +104,9 @@ export const processPR = (
       );
 
       // Step 6: Post comment to GitHub
-      // TEMPORARILY DISABLED FOR TESTING - review is saved to /tmp/review-rock-debug-*.md
-      yield* Console.log(`[Workflow] SKIPPING posting to GitHub (disabled for testing)`);
-      yield* Console.log(`[Workflow] Review generated successfully for PR #${prNumber}`);
-      // yield* github.postComment(repo, prNumber, reviewContent);
-      // yield* Console.log(`[Workflow] Successfully posted comment to PR #${prNumber}`);
+      yield* Console.log(`[Workflow] Posting review comment to PR #${prNumber}`);
+      yield* github.postComment(repo, prNumber, reviewContent);
+      yield* Console.log(`[Workflow] Successfully posted comment to PR #${prNumber}`);
 
       return reviewContent;
     }).pipe(
