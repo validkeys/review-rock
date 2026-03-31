@@ -204,7 +204,7 @@ gh release create v0.1.0 \
 ```
 
 Or manually via GitHub UI:
-1. Go to https://github.com/kydavis/review-rock/releases/new
+1. Go to https://github.com/validkeys/review-rock/releases/new
 2. Choose the tag (v0.1.0)
 3. Set release title: "Review Rock v0.1.0"
 4. Copy the relevant section from CHANGELOG.md to the description
