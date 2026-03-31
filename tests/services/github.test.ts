@@ -248,4 +248,160 @@ describe("GitHubService", () => {
     it.todo("should return GitHubCommandError when gh command fails");
     it.todo("should handle large diffs");
   });
+
+  describe("removeLabel", () => {
+    it("should remove label from PR successfully", async ({ expect }) => {
+      const { CommandExecutor } = await import("@effect/platform");
+      const { Effect, Layer } = await import("effect");
+      const { GitHubService, GitHubServiceLive } = await import("../../src/services/github.js");
+
+      const mockCommandExecutor = Layer.succeed(CommandExecutor.CommandExecutor, {
+        start: (_command: never) =>
+          Effect.succeed({
+            exitCode: Effect.succeed(0),
+            stdout: Effect.succeed(""),
+            stderr: Effect.succeed(""),
+          } as never),
+        string: (_command: never) => Effect.succeed(""),
+      } as never);
+
+      const TestLayer = GitHubServiceLive.pipe(Layer.provide(mockCommandExecutor));
+
+      const program = Effect.gen(function* () {
+        const github = yield* GitHubService;
+        return yield* github.removeLabel("owner/repo", 123, "reviewing");
+      });
+
+      await Effect.runPromise(program.pipe(Effect.provide(TestLayer)));
+      // If we reach here, the operation succeeded
+      expect(true).toBe(true);
+    });
+
+    it("should return GitHubCommandError when gh command fails", async ({ expect }) => {
+      const { CommandExecutor } = await import("@effect/platform");
+      const { Effect, Layer, Exit } = await import("effect");
+      const { GitHubService, GitHubServiceLive } = await import("../../src/services/github.js");
+      const { GitHubCommandError } = await import("../../src/errors/github.js");
+
+      const mockCommandExecutor = Layer.succeed(CommandExecutor.CommandExecutor, {
+        start: (_command: never) =>
+          Effect.fail({
+            message: "label not found",
+          } as never),
+        string: (_command: never) =>
+          Effect.fail({
+            message: "label not found",
+          } as never),
+      } as never);
+
+      const TestLayer = GitHubServiceLive.pipe(Layer.provide(mockCommandExecutor));
+
+      const program = Effect.gen(function* () {
+        const github = yield* GitHubService;
+        return yield* github.removeLabel("owner/repo", 123, "reviewing");
+      });
+
+      const result = await Effect.runPromiseExit(program.pipe(Effect.provide(TestLayer)));
+      expect(Exit.isFailure(result)).toBe(true);
+      if (Exit.isFailure(result)) {
+        expect(result.cause._tag).toBe("Fail");
+        if (result.cause._tag === "Fail") {
+          const error = result.cause.error;
+          expect(error).toBeInstanceOf(GitHubCommandError);
+        }
+      }
+    });
+  });
+
+  describe("postComment", () => {
+    it("should post comment to PR successfully", async ({ expect }) => {
+      const { CommandExecutor } = await import("@effect/platform");
+      const { Effect, Layer } = await import("effect");
+      const { GitHubService, GitHubServiceLive } = await import("../../src/services/github.js");
+
+      const mockCommandExecutor = Layer.succeed(CommandExecutor.CommandExecutor, {
+        start: (_command: never) =>
+          Effect.succeed({
+            exitCode: Effect.succeed(0),
+            stdout: Effect.succeed(""),
+            stderr: Effect.succeed(""),
+          } as never),
+        string: (_command: never) => Effect.succeed(""),
+      } as never);
+
+      const TestLayer = GitHubServiceLive.pipe(Layer.provide(mockCommandExecutor));
+
+      const program = Effect.gen(function* () {
+        const github = yield* GitHubService;
+        return yield* github.postComment("owner/repo", 123, "Great work on this PR!");
+      });
+
+      await Effect.runPromise(program.pipe(Effect.provide(TestLayer)));
+      // If we reach here, the operation succeeded
+      expect(true).toBe(true);
+    });
+
+    it("should handle special characters in comment", async ({ expect }) => {
+      const { CommandExecutor } = await import("@effect/platform");
+      const { Effect, Layer } = await import("effect");
+      const { GitHubService, GitHubServiceLive } = await import("../../src/services/github.js");
+
+      const mockCommandExecutor = Layer.succeed(CommandExecutor.CommandExecutor, {
+        start: (_command: never) =>
+          Effect.succeed({
+            exitCode: Effect.succeed(0),
+            stdout: Effect.succeed(""),
+            stderr: Effect.succeed(""),
+          } as never),
+        string: (_command: never) => Effect.succeed(""),
+      } as never);
+
+      const TestLayer = GitHubServiceLive.pipe(Layer.provide(mockCommandExecutor));
+
+      const program = Effect.gen(function* () {
+        const github = yield* GitHubService;
+        const commentWithSpecialChars = "Review comment with \"quotes\" and 'apostrophes'";
+        return yield* github.postComment("owner/repo", 123, commentWithSpecialChars);
+      });
+
+      await Effect.runPromise(program.pipe(Effect.provide(TestLayer)));
+      // If we reach here, the operation succeeded
+      expect(true).toBe(true);
+    });
+
+    it("should return GitHubCommandError when gh command fails", async ({ expect }) => {
+      const { CommandExecutor } = await import("@effect/platform");
+      const { Effect, Layer, Exit } = await import("effect");
+      const { GitHubService, GitHubServiceLive } = await import("../../src/services/github.js");
+      const { GitHubCommandError } = await import("../../src/errors/github.js");
+
+      const mockCommandExecutor = Layer.succeed(CommandExecutor.CommandExecutor, {
+        start: (_command: never) =>
+          Effect.fail({
+            message: "PR not found",
+          } as never),
+        string: (_command: never) =>
+          Effect.fail({
+            message: "PR not found",
+          } as never),
+      } as never);
+
+      const TestLayer = GitHubServiceLive.pipe(Layer.provide(mockCommandExecutor));
+
+      const program = Effect.gen(function* () {
+        const github = yield* GitHubService;
+        return yield* github.postComment("owner/repo", 999, "This should fail");
+      });
+
+      const result = await Effect.runPromiseExit(program.pipe(Effect.provide(TestLayer)));
+      expect(Exit.isFailure(result)).toBe(true);
+      if (Exit.isFailure(result)) {
+        expect(result.cause._tag).toBe("Fail");
+        if (result.cause._tag === "Fail") {
+          const error = result.cause.error;
+          expect(error).toBeInstanceOf(GitHubCommandError);
+        }
+      }
+    });
+  });
 });

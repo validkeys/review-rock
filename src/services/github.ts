@@ -73,6 +73,19 @@ export interface GitHubService {
   ) => Effect.Effect<void, GitHubCommandError>;
 
   /**
+   * Post a comment on a pull request
+   * @param repo - Repository in format "owner/repo"
+   * @param prNumber - Pull request number
+   * @param comment - Comment text to post
+   * @returns Effect that resolves to void or GitHubCommandError
+   */
+  readonly postComment: (
+    repo: string,
+    prNumber: number,
+    comment: string
+  ) => Effect.Effect<void, GitHubCommandError>;
+
+  /**
    * Get detailed information about a pull request
    * @param repo - Repository in format "owner/repo"
    * @param prNumber - Pull request number
@@ -215,6 +228,74 @@ const executeClaimPRCommand = (
   });
 
 /**
+ * Helper to execute gh pr edit command to remove a label from a PR
+ */
+const executeRemoveLabelCommand = (
+  repo: string,
+  prNumber: number,
+  label: string
+): Effect.Effect<void, GitHubCommandError, CommandExecutor.CommandExecutor> =>
+  Effect.gen(function* () {
+    // Execute gh pr edit command
+    const command = Command.make(
+      "gh",
+      "pr",
+      "edit",
+      String(prNumber),
+      "--repo",
+      repo,
+      "--remove-label",
+      label
+    );
+
+    // Run command
+    yield* Command.string(command).pipe(
+      Effect.mapError(
+        (error) =>
+          new GitHubCommandError({
+            command: "gh pr edit --remove-label",
+            stderr: error.message || String(error),
+            exitCode: 1,
+          })
+      )
+    );
+  });
+
+/**
+ * Helper to execute gh pr comment command to post a comment
+ */
+const executePostCommentCommand = (
+  repo: string,
+  prNumber: number,
+  comment: string
+): Effect.Effect<void, GitHubCommandError, CommandExecutor.CommandExecutor> =>
+  Effect.gen(function* () {
+    // Execute gh pr comment command
+    const command = Command.make(
+      "gh",
+      "pr",
+      "comment",
+      String(prNumber),
+      "--repo",
+      repo,
+      "--body",
+      comment
+    );
+
+    // Run command
+    yield* Command.string(command).pipe(
+      Effect.mapError(
+        (error) =>
+          new GitHubCommandError({
+            command: "gh pr comment",
+            stderr: error.message || String(error),
+            exitCode: 1,
+          })
+      )
+    );
+  });
+
+/**
  * Helper to parse file paths from gh JSON output
  */
 const parseFiles = (files: unknown): ReadonlyArray<string> => {
@@ -314,7 +395,14 @@ export const GitHubServiceLive = Layer.effect(
         executeClaimPRCommand(repo, prNumber, label).pipe(
           Effect.provideService(CommandExecutor.CommandExecutor, executor)
         ),
-      removeLabel: () => Effect.dieMessage("Not implemented - will be implemented in m4-003"),
+      removeLabel: (repo: string, prNumber: number, label: string) =>
+        executeRemoveLabelCommand(repo, prNumber, label).pipe(
+          Effect.provideService(CommandExecutor.CommandExecutor, executor)
+        ),
+      postComment: (repo: string, prNumber: number, comment: string) =>
+        executePostCommentCommand(repo, prNumber, comment).pipe(
+          Effect.provideService(CommandExecutor.CommandExecutor, executor)
+        ),
       getPRDetails: (repo: string, prNumber: number) =>
         executeGetPRDetailsCommand(repo, prNumber).pipe(
           Effect.provideService(CommandExecutor.CommandExecutor, executor)
