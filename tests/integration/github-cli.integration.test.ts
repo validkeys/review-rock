@@ -15,11 +15,11 @@
  * No write operations are performed to avoid requiring repository access.
  */
 
-import { it, describe, beforeAll } from "vitest";
-import { Effect, Layer } from "effect";
 import { NodeCommandExecutor } from "@effect/platform-node";
-import { GitHubService } from "../../src/services/github.js";
+import { Effect, Layer } from "effect";
+import { beforeAll, describe, it } from "vitest";
 import { ConfigService } from "../../src/services/config.js";
+import { GitHubService } from "../../src/services/github.js";
 
 // Check if gh CLI is available and authenticated
 const hasGhCLI = async (): Promise<boolean> => {
@@ -51,10 +51,9 @@ const TestConfigLayer = Layer.succeed(
   })
 );
 
-const MainLayer = Layer.mergeAll(
-  TestConfigLayer,
-  NodeCommandExecutor.layer
-).pipe(Layer.provide(GitHubService.Default));
+const MainLayer = Layer.mergeAll(TestConfigLayer, NodeCommandExecutor.layer).pipe(
+  Layer.provide(GitHubService.Default)
+);
 
 describe("GitHubService Integration with gh CLI", () => {
   let skipTests = false;
@@ -67,69 +66,63 @@ describe("GitHubService Integration with gh CLI", () => {
     }
   });
 
-  it.skipIf(() => skipTests)(
-    "should list open PRs from public repository",
-    async () => {
-      const program = Effect.gen(function* () {
-        const github = yield* GitHubService;
-        const prs = yield* github.listOpenPRs();
+  it.skipIf(() => skipTests)("should list open PRs from public repository", async () => {
+    const program = Effect.gen(function* () {
+      const github = yield* GitHubService;
+      const prs = yield* github.listOpenPRs();
 
-        // The cli/cli repo should have at least some PRs (it's an active project)
-        // We're not asserting a specific number since it varies
-        return { count: prs.length, sample: prs[0] };
-      });
+      // The cli/cli repo should have at least some PRs (it's an active project)
+      // We're not asserting a specific number since it varies
+      return { count: prs.length, sample: prs[0] };
+    });
 
-      const result = await Effect.runPromise(program.pipe(Effect.provide(MainLayer)));
+    const result = await Effect.runPromise(program.pipe(Effect.provide(MainLayer)));
 
-      // Basic assertions
-      console.log(`Found ${result.count} open PRs`);
-      if (result.sample) {
-        console.log(`Sample PR: #${result.sample.number} - ${result.sample.title}`);
-      }
-
-      // The repo should have a number and title
-      if (result.sample) {
-        expect(result.sample.number).toBeGreaterThan(0);
-        expect(result.sample.title).toBeTruthy();
-      }
+    // Basic assertions
+    console.log(`Found ${result.count} open PRs`);
+    if (result.sample) {
+      console.log(`Sample PR: #${result.sample.number} - ${result.sample.title}`);
     }
-  );
 
-  it.skipIf(() => skipTests)(
-    "should get PR details for a specific PR",
-    async () => {
-      const program = Effect.gen(function* () {
-        const github = yield* GitHubService;
+    // The repo should have a number and title
+    if (result.sample) {
+      expect(result.sample.number).toBeGreaterThan(0);
+      expect(result.sample.title).toBeTruthy();
+    }
+  });
 
-        // First get any open PR
-        const prs = yield* github.listOpenPRs();
-        if (prs.length === 0) {
-          return { skipped: true, reason: "No open PRs available" };
-        }
+  it.skipIf(() => skipTests)("should get PR details for a specific PR", async () => {
+    const program = Effect.gen(function* () {
+      const github = yield* GitHubService;
 
-        const firstPR = prs[0];
-        const details = yield* github.getPRDetails(firstPR.number);
-
-        return { skipped: false, details, originalPR: firstPR };
-      });
-
-      const result = await Effect.runPromise(program.pipe(Effect.provide(MainLayer)));
-
-      if (result.skipped) {
-        console.log(`⚠️  ${result.reason}`);
-        return;
+      // First get any open PR
+      const prs = yield* github.listOpenPRs();
+      if (prs.length === 0) {
+        return { skipped: true, reason: "No open PRs available" };
       }
 
-      // Verify details match the PR we fetched
-      expect(result.details.number).toBe(result.originalPR.number);
-      expect(result.details.title).toBe(result.originalPR.title);
-      expect(result.details.body).toBeTruthy();
-      expect(result.details.author).toBeTruthy();
+      const firstPR = prs[0];
+      const details = yield* github.getPRDetails(firstPR.number);
 
-      console.log(`✓ PR #${result.details.number}: ${result.details.title}`);
-      console.log(`  Author: ${result.details.author}`);
+      return { skipped: false, details, originalPR: firstPR };
+    });
+
+    const result = await Effect.runPromise(program.pipe(Effect.provide(MainLayer)));
+
+    if (result.skipped) {
+      console.log(`⚠️  ${result.reason}`);
+      return;
     }
-  );
+
+    // Verify details match the PR we fetched
+    expect(result.details.number).toBe(result.originalPR.number);
+    expect(result.details.title).toBe(result.originalPR.title);
+    expect(result.details.body).toBeTruthy();
+    expect(result.details.author).toBeTruthy();
+
+    console.log(`✓ PR #${result.details.number}: ${result.details.title}`);
+    console.log(`  Author: ${result.details.author}`);
+  });
 
   it.skipIf(() => skipTests)("should get PR diff for a specific PR", async () => {
     const program = Effect.gen(function* () {

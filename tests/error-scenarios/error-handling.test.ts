@@ -5,9 +5,9 @@
  * using mocked CommandExecutor responses.
  */
 
-import { it, describe, expect } from "vitest";
-import { Effect, Layer, Exit } from "effect";
 import { CommandExecutor } from "@effect/platform";
+import { Effect, Exit, Layer } from "effect";
+import { describe, expect, it } from "vitest";
 import { GitHubService, GitHubServiceLive } from "../../src/services/github.js";
 import { ReviewService, ReviewServiceLive } from "../../src/services/review.js";
 
