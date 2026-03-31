@@ -1,4 +1,6 @@
 import { Args, Command, Options } from "@effect/cli";
+import { Console, Effect } from "effect";
+import { PollingService } from "../services/polling.js";
 
 /**
  * Repository argument for specifying the GitHub repository to review.
@@ -33,10 +35,15 @@ export const reviewRockCommand = Command.make(
     config: configOption,
     pollingInterval: pollingIntervalOption,
   },
-  () => {
-    // Handler will be wired in main.ts
-    throw new Error("Command handler not yet implemented");
-  }
+  ({ repository }) =>
+    Effect.gen(function* () {
+      yield* Console.log(`[review-rock] Starting review automation for ${repository}`);
+
+      const polling = yield* PollingService;
+
+      // Start polling - this runs indefinitely
+      yield* polling.startPolling(repository);
+    })
 ).pipe(
   Command.withDescription(
     "Automated PR review using Claude via claudecode CLI with distributed coordination"
