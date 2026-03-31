@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Effect } from "effect";
 import type { ReviewService, PRContext } from "../../src/services/review.js";
-import { buildClaudeCodeCommand } from "../../src/services/review.js";
+import { buildClaudeCodeCommand, detectAWSTokenExpiry } from "../../src/services/review.js";
 import {
   AWSTokenExpiredError,
   ClaudeCodeCommandError,
@@ -127,9 +127,46 @@ describe("ReviewService", () => {
   });
 
   describe("detectAWSTokenExpiry", () => {
-    it.todo("should detect 'token has expired' message");
-    it.todo("should detect 'credentials have expired' message");
-    it.todo("should return None for non-token errors");
+    it("should detect 'token has expired' message", () => {
+      const stderr = "Error: AWS SSO token has expired. Please run 'aws sso login'";
+      const result = detectAWSTokenExpiry(stderr);
+
+      expect(result._tag).toBe("Some");
+      if (result._tag === "Some") {
+        expect(result.value._tag).toBe("AWSTokenExpiredError");
+        expect(result.value.helpMessage).toContain("aws sso login");
+      }
+    });
+
+    it("should detect 'credentials have expired' message", () => {
+      const stderr = "Error: Your AWS credentials have expired";
+      const result = detectAWSTokenExpiry(stderr);
+
+      expect(result._tag).toBe("Some");
+      if (result._tag === "Some") {
+        expect(result.value._tag).toBe("AWSTokenExpiredError");
+      }
+    });
+
+    it("should detect 'SSO session has expired' message", () => {
+      const stderr = "SSO session has expired. Please re-authenticate.";
+      const result = detectAWSTokenExpiry(stderr);
+
+      expect(result._tag).toBe("Some");
+    });
+
+    it("should return None for non-token errors", () => {
+      const stderr = "Error: Command not found";
+      const result = detectAWSTokenExpiry(stderr);
+
+      expect(result._tag).toBe("None");
+    });
+
+    it("should return None for empty stderr", () => {
+      const result = detectAWSTokenExpiry("");
+
+      expect(result._tag).toBe("None");
+    });
   });
 
   describe("detectSkillNotFound", () => {

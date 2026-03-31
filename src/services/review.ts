@@ -1,4 +1,4 @@
-import { Context, Effect } from "effect";
+import { Context, Effect, Option } from "effect";
 import type { PRDetails } from "./github.js";
 import {
   AWSTokenExpiredError,
@@ -81,4 +81,34 @@ ${prContext.details.files.join("\n")}
 ${prContext.diff}`;
 
   return { command, input };
+};
+
+/**
+ * Token expiry error patterns to detect in stderr
+ * Extensible list of patterns that indicate AWS SSO token expiry
+ * All patterns are lowercase for case-insensitive matching
+ */
+const TOKEN_EXPIRY_PATTERNS = [
+  "token has expired",
+  "credentials have expired",
+  "sso session has expired",
+] as const;
+
+/**
+ * Detects AWS SSO token expiry from claudecode stderr output
+ * @internal
+ */
+export const detectAWSTokenExpiry = (stderr: string): Option.Option<AWSTokenExpiredError> => {
+  const lowerStderr = stderr.toLowerCase();
+  const hasTokenExpiry = TOKEN_EXPIRY_PATTERNS.some((pattern) => lowerStderr.includes(pattern));
+
+  if (hasTokenExpiry) {
+    return Option.some(
+      new AWSTokenExpiredError({
+        helpMessage: "AWS SSO token expired. Run 'aws sso login' to refresh.",
+      })
+    );
+  }
+
+  return Option.none();
 };
