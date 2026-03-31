@@ -60,6 +60,19 @@ export interface GitHubService {
   ) => Effect.Effect<void, LabelClaimFailedError>;
 
   /**
+   * Remove a label from a pull request
+   * @param repo - Repository in format "owner/repo"
+   * @param prNumber - Pull request number
+   * @param label - Label to remove
+   * @returns Effect that resolves to void or GitHubCommandError
+   */
+  readonly removeLabel: (
+    repo: string,
+    prNumber: number,
+    label: string
+  ) => Effect.Effect<void, GitHubCommandError>;
+
+  /**
    * Get detailed information about a pull request
    * @param repo - Repository in format "owner/repo"
    * @param prNumber - Pull request number
@@ -301,6 +314,7 @@ export const GitHubServiceLive = Layer.effect(
         executeClaimPRCommand(repo, prNumber, label).pipe(
           Effect.provideService(CommandExecutor.CommandExecutor, executor)
         ),
+      removeLabel: () => Effect.dieMessage("Not implemented - will be implemented in m4-003"),
       getPRDetails: (repo: string, prNumber: number) =>
         executeGetPRDetailsCommand(repo, prNumber).pipe(
           Effect.provideService(CommandExecutor.CommandExecutor, executor)
