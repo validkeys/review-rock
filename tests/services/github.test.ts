@@ -405,3 +405,59 @@ describe("GitHubService", () => {
     });
   });
 });
+
+  describe("removeLabel", () => {
+    it("should remove label from PR successfully", async ({ expect }) => {
+      const { CommandExecutor } = await import("@effect/platform");
+      const { Effect, Layer } = await import("effect");
+      const { GitHubService, GitHubServiceLive } = await import("../../src/services/github.js");
+
+      const mockCommandExecutor = Layer.succeed(CommandExecutor.CommandExecutor, {
+        start: (_command: never) =>
+          Effect.succeed({
+            exitCode: Effect.succeed(0),
+            stdout: Effect.succeed(""),
+            stderr: Effect.succeed(""),
+          } as never),
+        string: (_command: never) => Effect.succeed(""),
+      } as never);
+
+      const TestLayer = GitHubServiceLive.pipe(Layer.provide(mockCommandExecutor));
+
+      const program = Effect.gen(function* () {
+        const github = yield* GitHubService;
+        yield* github.removeLabel("owner/repo", 123, "claimed");
+      });
+
+      const result = await Effect.runPromise(program.pipe(Effect.provide(TestLayer)));
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe("postComment", () => {
+    it("should post comment to PR successfully", async ({ expect }) => {
+      const { CommandExecutor } = await import("@effect/platform");
+      const { Effect, Layer } = await import("effect");
+      const { GitHubService, GitHubServiceLive } = await import("../../src/services/github.js");
+
+      const mockCommandExecutor = Layer.succeed(CommandExecutor.CommandExecutor, {
+        start: (_command: never) =>
+          Effect.succeed({
+            exitCode: Effect.succeed(0),
+            stdout: Effect.succeed(""),
+            stderr: Effect.succeed(""),
+          } as never),
+        string: (_command: never) => Effect.succeed(""),
+      } as never);
+
+      const TestLayer = GitHubServiceLive.pipe(Layer.provide(mockCommandExecutor));
+
+      const program = Effect.gen(function* () {
+        const github = yield* GitHubService;
+        yield* github.postComment("owner/repo", 123, "Great work!");
+      });
+
+      const result = await Effect.runPromise(program.pipe(Effect.provide(TestLayer)));
+      expect(result).toBeUndefined();
+    });
+  });
