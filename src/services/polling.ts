@@ -1,6 +1,9 @@
-import { Console, Context, Duration, Effect, Layer, Option, Schedule } from "effect";
+import { Console, Context, Duration, Effect, Layer, Schedule } from "effect";
+import { processPR } from "../orchestration/workflow.js";
+import { ClassificationService } from "./classification.js";
 import { ConfigService } from "./config.js";
 import { GitHubService } from "./github.js";
+import { ReviewService } from "./review.js";
 
 /**
  * PollingService provides periodic polling operations for GitHub repositories.
@@ -34,12 +37,15 @@ export const PollingService = Context.GenericTag<PollingService>("@services/Poll
  * Live implementation of PollingService
  *
  * Uses Effect.repeat with Schedule.spaced to poll GitHub at regular intervals
- * configured via ConfigService.
+ * configured via ConfigService. For each unclaimed PR, processes it through
+ * the complete review workflow.
  */
 export const PollingServiceLive = Layer.effect(
   PollingService,
   Effect.gen(function* () {
     const github = yield* GitHubService;
+    const classification = yield* ClassificationService;
+    const review = yield* ReviewService;
     const config = yield* ConfigService;
 
     return PollingService.of({
@@ -65,8 +71,27 @@ export const PollingServiceLive = Layer.effect(
               `[PollingService] Found ${unclaimedPRs.length} unclaimed PRs out of ${prs.length} total`
             );
 
-            // Return first unclaimed PR or None
-            return unclaimedPRs.length > 0 ? Option.some(unclaimedPRs[0]) : Option.none();
+            // Process each unclaimed PR through the workflow
+            for (const pr of unclaimedPRs) {
+              yield* Console.log(`[PollingService] Processing PR #${pr.number}: ${pr.title}`);
+
+              // Process PR with workflow - catch errors to prevent polling from stopping
+              yield* processPR(repo, pr.number, claimLabel).pipe(
+                Effect.provideService(GitHubService, github),
+                Effect.provideService(ClassificationService, classification),
+                Effect.provideService(ReviewService, review),
+                Effect.tap((reviewContent) =>
+                  Console.log(
+                    `[PollingService] Successfully reviewed PR #${pr.number}, review length: ${reviewContent.length} chars`
+                  )
+                ),
+                Effect.catchAll((error) =>
+                  Console.log(
+                    `[PollingService] Failed to process PR #${pr.number}: ${String(error)}`
+                  ).pipe(Effect.as(undefined))
+                )
+              );
+            }
           }).pipe(Effect.orDie);
 
           // Create schedule with configured interval
