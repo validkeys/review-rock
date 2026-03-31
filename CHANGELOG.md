@@ -124,4 +124,4 @@ Not applicable - this is the initial release.
 
 ---
 
-[0.1.0]: https://github.com/yourusername/review-rock/releases/tag/v0.1.0
+[0.1.0]: https://github.com/validkeys/review-rock/releases/tag/v0.1.0

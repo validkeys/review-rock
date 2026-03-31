@@ -48,11 +48,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/kydavis/review-rock.git"
+    "url": "https://github.com/validkeys/review-rock.git"
   },
-  "homepage": "https://github.com/kydavis/review-rock#readme",
+  "homepage": "https://github.com/validkeys/review-rock#readme",
   "bugs": {
-    "url": "https://github.com/kydavis/review-rock/issues"
+    "url": "https://github.com/validkeys/review-rock/issues"
   },
   "dependencies": {
     "@effect/cli": "^0.47.0",
