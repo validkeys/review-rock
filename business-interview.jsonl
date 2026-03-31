@@ -1,0 +1,23 @@
+{"question": "primary_problem", "answer": "Reduce manual PR review workload - Developers spend too much time manually reviewing PRs, want to automate this process", "timestamp": "2026-03-30T15:20:00Z"}
+{"question": "core_value_proposition", "answer": "Use Claude models through AWS Bedrock to automatically review PRs with intelligent, contextual feedback", "timestamp": "2026-03-30T15:21:00Z"}
+{"question": "primary_scope", "answer": "MVP: Core review automation only - Focus on automating the review process using Claude/Bedrock, fetching PR data, claiming mechanism, and reviews as GitHub PR comments", "timestamp": "2026-03-30T15:20:00Z"}
+{"question": "what_should_this_project_not_do_initial_mvp_scope", "answer": "No external integrations - Keep everything self-contained using GitHub API and local processing only", "timestamp": "2026-03-30T15:21:00Z"}
+{"question": "primary_users", "answer": "Development team members - Developers, senior engineers, tech leads who review PRs during their daily work", "timestamp": "2026-03-30T15:22:00Z"}
+{"Question": "primary_goal_for_users", "answer": "Get faster feedback on PRs - catch bugs, security issues, performance problems before merge", "timestamp": "2026-03-30T15:24:00Z"}
+{"Question": "pain_points_ranking", "answer": ["Slow feedback loops", "Inconsistent review quality", "Review bottleneck", "context switching overhead"], "timestamp": "2026-03-30T15:26:00Z"}
+{"question": "success_metrics", "answer": "Time saved metrics - Track time saved on PR reviews, faster merge cycles, reduced bottleneck", "timestamp": "2026-03-30T16:45:00Z"}
+{"question": "success_target", "answer": "2-3x more PRs reviewed per day - Increased throughput", "timestamp": "2026-03-30T16:46:00Z"}
+{"question": "technical_constraints", "answer": "All of the above - Must use AWS Bedrock for Claude, must integrate with existing GitHub infrastructure, must be runnable on developer machines", "timestamp": "2026-03-30T16:47:00Z"}
+{"question": "timeline", "answer": "2-4 weeks - Quick MVP to validate the concept", "timestamp": "2026-03-30T16:48:00Z"}
+{"question": "dependencies", "answer": "GitHub CLI and AWS Bedrock - Use gh CLI for GitHub operations and AWS Bedrock for Claude API access", "timestamp": "2026-03-30T16:49:00Z"}
+{"question": "assumptions", "answer": "Teams use GitHub for PRs and developers have AWS credentials - Standard GitHub workflow is in place with configured Bedrock access", "timestamp": "2026-03-30T16:50:00Z"}
+{"question": "risks", "answer": "Coordination issues - Multiple machines reviewing same PR (race conditions)", "timestamp": "2026-03-30T16:51:00Z"}
+{"question": "risk_mitigation", "answer": "GitHub labels as locks - Use PR labels to claim/lock PRs before review", "timestamp": "2026-03-30T16:52:00Z"}
+{"question": "teams_notification_priority", "answer": "Post-MVP feature - Not needed initially, add after validation", "timestamp": "2026-03-30T16:53:00Z"}
+{"question": "pr_type_detection", "answer": "File path analysis - Changes in apps/react-webapp or lib/core-ui-system = frontend, all other paths = backend, mixed if both", "timestamp": "2026-03-30T16:54:00Z"}
+{"question": "skill_selection", "answer": "Predefined skill mapping - Frontend PR uses frontend skills, Backend PR uses backend skills, Mixed PR uses both", "timestamp": "2026-03-30T16:55:00Z"}
+{"question": "configuration_management", "answer": "Use existing system credentials - AWS Bedrock uses pre-existing environment variables, GitHub CLI uses existing gh auth, minimal additional configuration needed", "timestamp": "2026-03-30T16:56:00Z"}
+{"question": "repository_specification", "answer": "Command-line argument - Pass repo as argument (e.g., ./review-rock validkeys/lumen). Target repository: https://github.com/validkeys/lumen", "timestamp": "2026-03-30T16:57:00Z"}
+{"question": "polling_frequency", "answer": "Every 5 minutes - Balance between responsiveness and API rate limits", "timestamp": "2026-03-30T16:58:00Z"}
+{"question": "error_handling", "answer": "Retry with exponential backoff - Retry failed operations with increasing delays", "timestamp": "2026-03-30T16:59:00Z"}
+{"question": "mvp_features", "answer": "All of the above - Poll for PRs, claim with label, classify type, run review, post comment, plus monitoring/logging and configuration", "timestamp": "2026-03-30T17:00:00Z"}
