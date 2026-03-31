@@ -1,16 +1,25 @@
 {
   "name": "review-rock",
   "version": "0.1.0",
-  "description": "Automated PR review system using Claude via CLI with distributed coordination",
+  "description": "Automated PR review using Claude AI via AWS Bedrock with distributed coordination",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
     "review-rock": "dist/main.js"
   },
+  "files": [
+    "dist/",
+    "review-rock.config.example.ts",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "TROUBLESHOOTING.md"
+  ],
   "scripts": {
     "precheck": "./scripts/validate-prerequisites.sh",
     "dev": "tsx src/main.ts",
     "build": "tsc",
+    "prepublishOnly": "pnpm run build && pnpm run test:run",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
@@ -20,9 +29,31 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write ."
   },
-  "keywords": ["code-review", "claude", "github", "automation", "effect-ts"],
-  "author": "",
+  "keywords": [
+    "github",
+    "pr",
+    "pull-request",
+    "review",
+    "code-review",
+    "claude",
+    "ai",
+    "bedrock",
+    "aws",
+    "automation",
+    "effect-ts",
+    "distributed",
+    "coordination"
+  ],
+  "author": "Ky Davis <ky@validkeys.com>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kydavis/review-rock.git"
+  },
+  "homepage": "https://github.com/kydavis/review-rock#readme",
+  "bugs": {
+    "url": "https://github.com/kydavis/review-rock/issues"
+  },
   "dependencies": {
     "@effect/cli": "^0.47.0",
     "@effect/platform": "^0.68.0",
