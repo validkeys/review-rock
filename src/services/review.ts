@@ -112,3 +112,35 @@ export const detectAWSTokenExpiry = (stderr: string): Option.Option<AWSTokenExpi
 
   return Option.none();
 };
+
+/**
+ * Skill not found error patterns to detect in stderr
+ * Extensible list of patterns that indicate the skill doesn't exist
+ * All patterns are lowercase for case-insensitive matching
+ */
+const SKILL_NOT_FOUND_PATTERNS = ["skill not found", "no such skill", "does not exist"] as const;
+
+/**
+ * Detects skill not found errors from claudecode stderr output
+ * @internal
+ */
+export const detectSkillNotFound = (
+  stderr: string,
+  skillName: string
+): Option.Option<SkillNotFoundError> => {
+  const lowerStderr = stderr.toLowerCase();
+  const hasSkillNotFound = SKILL_NOT_FOUND_PATTERNS.some((pattern) =>
+    lowerStderr.includes(pattern)
+  );
+
+  if (hasSkillNotFound) {
+    return Option.some(
+      new SkillNotFoundError({
+        skillName,
+        helpMessage: `Skill '${skillName}' not found. Install with: claudecode skill add <skill-url>`,
+      })
+    );
+  }
+
+  return Option.none();
+};

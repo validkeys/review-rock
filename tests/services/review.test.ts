@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { Effect } from "effect";
 import type { ReviewService, PRContext } from "../../src/services/review.js";
-import { buildClaudeCodeCommand, detectAWSTokenExpiry } from "../../src/services/review.js";
+import {
+  buildClaudeCodeCommand,
+  detectAWSTokenExpiry,
+  detectSkillNotFound,
+} from "../../src/services/review.js";
 import {
   AWSTokenExpiredError,
   ClaudeCodeCommandError,
@@ -170,9 +174,47 @@ describe("ReviewService", () => {
   });
 
   describe("detectSkillNotFound", () => {
-    it.todo("should detect 'skill not found' message");
-    it.todo("should detect skill-specific errors");
-    it.todo("should return None for non-skill errors");
+    it("should detect 'skill not found' message", () => {
+      const stderr = "Error: skill not found";
+      const result = detectSkillNotFound(stderr, "test-skill");
+
+      expect(result._tag).toBe("Some");
+      if (result._tag === "Some") {
+        expect(result.value._tag).toBe("SkillNotFoundError");
+        expect(result.value.skillName).toBe("test-skill");
+        expect(result.value.helpMessage).toContain("claudecode skill add");
+      }
+    });
+
+    it("should detect 'no such skill' message", () => {
+      const stderr = "Error: no such skill available";
+      const result = detectSkillNotFound(stderr, "review-skill");
+
+      expect(result._tag).toBe("Some");
+      if (result._tag === "Some") {
+        expect(result.value.skillName).toBe("review-skill");
+      }
+    });
+
+    it("should detect skill-specific error message", () => {
+      const stderr = "Error: 'my-skill' does not exist";
+      const result = detectSkillNotFound(stderr, "my-skill");
+
+      expect(result._tag).toBe("Some");
+    });
+
+    it("should return None for non-skill errors", () => {
+      const stderr = "Error: Network timeout";
+      const result = detectSkillNotFound(stderr, "test-skill");
+
+      expect(result._tag).toBe("None");
+    });
+
+    it("should return None for empty stderr", () => {
+      const result = detectSkillNotFound("", "test-skill");
+
+      expect(result._tag).toBe("None");
+    });
   });
 
   describe("generateReview", () => {
