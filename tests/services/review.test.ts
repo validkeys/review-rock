@@ -1,17 +1,16 @@
-import { describe, it, expect } from "vitest";
-import { Effect } from "effect";
-import type { ReviewService, PRContext } from "../../src/services/review.js";
-import {
-  buildClaudeCodeCommand,
-  detectAWSTokenExpiry,
-  detectSkillNotFound,
-} from "../../src/services/review.js";
+import { describe, expect, it } from "vitest";
 import {
   AWSTokenExpiredError,
   ClaudeCodeCommandError,
   ReviewGenerationError,
   SkillNotFoundError,
 } from "../../src/errors/review.js";
+import type { PRContext } from "../../src/services/review.js";
+import {
+  buildClaudeCodeCommand,
+  detectAWSTokenExpiry,
+  detectSkillNotFound,
+} from "../../src/services/review.js";
 
 describe("ReviewService", () => {
   describe("interface and error types", () => {
@@ -218,10 +217,10 @@ describe("ReviewService", () => {
   });
 
   describe("generateReview", () => {
-    it.todo("should generate review successfully");
-    it.todo("should detect AWS token expiry");
-    it.todo("should detect skill not found");
+    it.todo("should generate review successfully with mocked Command");
+    it.todo("should detect AWS token expiry from stderr");
+    it.todo("should detect skill not found from stderr");
     it.todo("should handle generic command errors");
-    it.todo("should retry on transient failures");
+    it.todo("should not retry non-transient errors");
   });
 });

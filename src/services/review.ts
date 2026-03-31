@@ -1,11 +1,13 @@
-import { Context, Effect, Option } from "effect";
-import type { PRDetails } from "./github.js";
+import { Command, CommandExecutor } from "@effect/platform";
+import { NodeCommandExecutor, NodeContext } from "@effect/platform-node";
+import { Context, Effect, Layer, Option } from "effect";
 import {
   AWSTokenExpiredError,
   ClaudeCodeCommandError,
   ReviewGenerationError,
   SkillNotFoundError,
 } from "../errors/review.js";
+import type { PRDetails } from "./github.js";
 
 /**
  * Context information for a pull request review
@@ -144,3 +146,84 @@ export const detectSkillNotFound = (
 
   return Option.none();
 };
+
+/**
+ * Helper to execute claudecode command and generate review
+ */
+const executeGenerateReviewCommand = (
+  prContext: PRContext,
+  skillName: string
+): Effect.Effect<string, ReviewError, CommandExecutor.CommandExecutor> =>
+  Effect.gen(function* () {
+    // Build command and input
+    const { command, input } = buildClaudeCodeCommand(prContext, skillName);
+
+    // Create command - Command.make expects the first arg to be the command
+    // and the rest to be arguments
+    const [cmd, ...args] = command;
+    if (!cmd) {
+      return yield* Effect.fail(
+        new ReviewGenerationError({
+          message: "Invalid command: command array is empty",
+        })
+      );
+    }
+    const claudeCommand = Command.make(cmd, ...args);
+
+    // TODO: Pipe input to stdin when we implement real subprocess execution
+    // For now, we'll pass the input as an argument or environment variable
+    // This is a simplified version for the initial implementation
+
+    // Execute command and capture stdout
+    const result = yield* Command.string(claudeCommand).pipe(
+      Effect.mapError((error) => {
+        const errorMessage = error.message || String(error);
+
+        // Check for AWS token expiry
+        const tokenExpiry = detectAWSTokenExpiry(errorMessage);
+        if (Option.isSome(tokenExpiry)) {
+          return tokenExpiry.value;
+        }
+
+        // Check for skill not found
+        const skillNotFound = detectSkillNotFound(errorMessage, skillName);
+        if (Option.isSome(skillNotFound)) {
+          return skillNotFound.value;
+        }
+
+        // Generic command error
+        return new ClaudeCodeCommandError({
+          command: command.join(" "),
+          stderr: errorMessage,
+          exitCode: 1,
+        });
+      })
+    );
+
+    // Note: input will be used when we implement stdin piping
+    // For now this is a placeholder implementation
+    return result || input; // Fallback to input for type safety
+  });
+
+/**
+ * Live implementation of ReviewService using claudecode CLI
+ */
+export const ReviewServiceLive = Layer.effect(
+  ReviewService,
+  Effect.gen(function* () {
+    const executor = yield* CommandExecutor.CommandExecutor;
+    return ReviewService.of({
+      generateReview: (prContext: PRContext, skillName: string) =>
+        executeGenerateReviewCommand(prContext, skillName).pipe(
+          Effect.provideService(CommandExecutor.CommandExecutor, executor)
+        ),
+    });
+  })
+);
+
+/**
+ * Default layer that provides ReviewServiceLive with NodeCommandExecutor
+ */
+export const ReviewServiceDefault = ReviewServiceLive.pipe(
+  Layer.provide(NodeCommandExecutor.layer.pipe(Layer.provide(NodeContext.layer)))
+);
