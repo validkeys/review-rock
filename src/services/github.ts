@@ -2,11 +2,7 @@ import { Command, CommandExecutor } from "@effect/platform";
 import { NodeCommandExecutor } from "@effect/platform-node";
 import { NodeContext } from "@effect/platform-node";
 import { Context, Effect, Layer, Schedule } from "effect";
-import {
-  GitHubCommandError,
-  LabelClaimFailedError,
-  type PRNotFoundError,
-} from "../errors/github.js";
+import { GitHubCommandError, LabelClaimFailedError, PRNotFoundError } from "../errors/github.js";
 
 /**
  * Represents a GitHub pull request
@@ -206,6 +202,90 @@ const executeClaimPRCommand = (
   });
 
 /**
+ * Helper to parse file paths from gh JSON output
+ */
+const parseFiles = (files: unknown): ReadonlyArray<string> => {
+  if (!Array.isArray(files)) return [];
+  return files
+    .filter(
+      (file): file is { path: string } =>
+        typeof file === "object" && file !== null && "path" in file
+    )
+    .map((file) => file.path);
+};
+
+/**
+ * Helper to execute gh pr view command and get PR details
+ */
+const executeGetPRDetailsCommand = (
+  repo: string,
+  prNumber: number
+): Effect.Effect<PRDetails, PRNotFoundError, CommandExecutor.CommandExecutor> =>
+  Effect.gen(function* () {
+    // Execute gh pr view command
+    const command = Command.make(
+      "gh",
+      "pr",
+      "view",
+      String(prNumber),
+      "--repo",
+      repo,
+      "--json",
+      "number,title,body,url,state,author,createdAt,updatedAt,labels,files"
+    );
+
+    // Run command and get output
+    const commandResult = yield* Command.string(command).pipe(
+      Effect.mapError((error) => {
+        const errorMessage = error.message || String(error);
+        // Check if the error is due to PR not found
+        const isPRNotFound =
+          errorMessage.toLowerCase().includes("not found") ||
+          errorMessage.toLowerCase().includes("could not resolve");
+        if (isPRNotFound) {
+          return new PRNotFoundError({ prNumber });
+        }
+        // Otherwise, wrap in PRNotFoundError with the actual error message
+        return new PRNotFoundError({ prNumber });
+      })
+    );
+
+    // Parse JSON output
+    const prDetails = yield* Effect.try({
+      try: () => {
+        const parsed = JSON.parse(commandResult) as {
+          number: number;
+          title: string;
+          body: string;
+          url: string;
+          state: string;
+          author: { login: string };
+          createdAt: string;
+          updatedAt: string;
+          labels: unknown;
+          files: unknown;
+        };
+
+        return {
+          number: parsed.number,
+          title: parsed.title,
+          body: parsed.body,
+          url: parsed.url,
+          state: parsed.state,
+          author: parsed.author.login,
+          createdAt: parsed.createdAt,
+          updatedAt: parsed.updatedAt,
+          labels: parseLabels(parsed.labels),
+          files: parseFiles(parsed.files),
+        } satisfies PRDetails;
+      },
+      catch: () => new PRNotFoundError({ prNumber }),
+    });
+
+    return prDetails;
+  });
+
+/**
  * Live implementation of GitHubService using GitHub CLI
  */
 export const GitHubServiceLive = Layer.effect(
@@ -221,7 +301,10 @@ export const GitHubServiceLive = Layer.effect(
         executeClaimPRCommand(repo, prNumber, label).pipe(
           Effect.provideService(CommandExecutor.CommandExecutor, executor)
         ),
-      getPRDetails: () => Effect.dieMessage("Not implemented"),
+      getPRDetails: (repo: string, prNumber: number) =>
+        executeGetPRDetailsCommand(repo, prNumber).pipe(
+          Effect.provideService(CommandExecutor.CommandExecutor, executor)
+        ),
       getPRDiff: () => Effect.dieMessage("Not implemented"),
     });
   })

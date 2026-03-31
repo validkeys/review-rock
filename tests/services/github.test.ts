@@ -112,9 +112,135 @@ describe("GitHubService", () => {
   });
 
   describe("getPRDetails", () => {
-    it.todo("should get PR details successfully");
-    it.todo("should return PRNotFoundError when PR does not exist");
-    it.todo("should parse PR details correctly including files");
+    it("should get PR details successfully", async ({ expect }) => {
+      const { CommandExecutor } = await import("@effect/platform");
+      const { Effect, Layer } = await import("effect");
+      const { GitHubService, GitHubServiceLive } = await import("../../src/services/github.js");
+
+      const mockResponse = JSON.stringify({
+        number: 123,
+        title: "Add new feature",
+        body: "This is a test PR",
+        url: "https://github.com/owner/repo/pull/123",
+        state: "OPEN",
+        author: { login: "testuser" },
+        createdAt: "2024-01-01T00:00:00Z",
+        updatedAt: "2024-01-02T00:00:00Z",
+        labels: [{ name: "feature" }, { name: "urgent" }],
+        files: [{ path: "src/file1.ts" }, { path: "src/file2.ts" }],
+      });
+
+      const mockCommandExecutor = Layer.succeed(CommandExecutor.CommandExecutor, {
+        start: (_command: never) =>
+          Effect.succeed({
+            exitCode: Effect.succeed(0),
+            stdout: Effect.succeed(mockResponse),
+            stderr: Effect.succeed(""),
+          } as never),
+        string: (_command: never) => Effect.succeed(mockResponse),
+      } as never);
+
+      const TestLayer = GitHubServiceLive.pipe(Layer.provide(mockCommandExecutor));
+
+      const program = Effect.gen(function* () {
+        const github = yield* GitHubService;
+        return yield* github.getPRDetails("owner/repo", 123);
+      });
+
+      const result = await Effect.runPromise(program.pipe(Effect.provide(TestLayer)));
+      expect(result).toEqual({
+        number: 123,
+        title: "Add new feature",
+        body: "This is a test PR",
+        url: "https://github.com/owner/repo/pull/123",
+        state: "OPEN",
+        author: "testuser",
+        createdAt: "2024-01-01T00:00:00Z",
+        updatedAt: "2024-01-02T00:00:00Z",
+        labels: ["feature", "urgent"],
+        files: ["src/file1.ts", "src/file2.ts"],
+      });
+    });
+
+    it("should return PRNotFoundError when PR does not exist", async ({ expect }) => {
+      const { CommandExecutor } = await import("@effect/platform");
+      const { Effect, Layer, Exit } = await import("effect");
+      const { GitHubService, GitHubServiceLive } = await import("../../src/services/github.js");
+      const { PRNotFoundError } = await import("../../src/errors/github.js");
+
+      const mockCommandExecutor = Layer.succeed(CommandExecutor.CommandExecutor, {
+        start: (_command: never) =>
+          Effect.fail({
+            message: "pull request not found",
+          } as never),
+        string: (_command: never) =>
+          Effect.fail({
+            message: "pull request not found",
+          } as never),
+      } as never);
+
+      const TestLayer = GitHubServiceLive.pipe(Layer.provide(mockCommandExecutor));
+
+      const program = Effect.gen(function* () {
+        const github = yield* GitHubService;
+        return yield* github.getPRDetails("owner/repo", 999);
+      });
+
+      const result = await Effect.runPromiseExit(program.pipe(Effect.provide(TestLayer)));
+      expect(Exit.isFailure(result)).toBe(true);
+      if (Exit.isFailure(result)) {
+        expect(result.cause._tag).toBe("Fail");
+        if (result.cause._tag === "Fail") {
+          const error = result.cause.error;
+          expect(error).toBeInstanceOf(PRNotFoundError);
+          expect(error.prNumber).toBe(999);
+        }
+      }
+    });
+
+    it("should parse PR details correctly including files", async ({ expect }) => {
+      const { CommandExecutor } = await import("@effect/platform");
+      const { Effect, Layer } = await import("effect");
+      const { GitHubService, GitHubServiceLive } = await import("../../src/services/github.js");
+
+      const mockResponse = JSON.stringify({
+        number: 456,
+        title: "Fix bug",
+        body: "",
+        url: "https://github.com/owner/repo/pull/456",
+        state: "CLOSED",
+        author: { login: "anotheruser" },
+        createdAt: "2024-02-01T00:00:00Z",
+        updatedAt: "2024-02-03T00:00:00Z",
+        labels: [],
+        files: [{ path: "README.md" }, { path: "src/index.ts" }, { path: "tests/unit.test.ts" }],
+      });
+
+      const mockCommandExecutor = Layer.succeed(CommandExecutor.CommandExecutor, {
+        start: (_command: never) =>
+          Effect.succeed({
+            exitCode: Effect.succeed(0),
+            stdout: Effect.succeed(mockResponse),
+            stderr: Effect.succeed(""),
+          } as never),
+        string: (_command: never) => Effect.succeed(mockResponse),
+      } as never);
+
+      const TestLayer = GitHubServiceLive.pipe(Layer.provide(mockCommandExecutor));
+
+      const program = Effect.gen(function* () {
+        const github = yield* GitHubService;
+        return yield* github.getPRDetails("owner/repo", 456);
+      });
+
+      const result = await Effect.runPromise(program.pipe(Effect.provide(TestLayer)));
+      expect(result.number).toBe(456);
+      expect(result.title).toBe("Fix bug");
+      expect(result.body).toBe("");
+      expect(result.author).toBe("anotheruser");
+      expect(result.labels).toEqual([]);
+      expect(result.files).toEqual(["README.md", "src/index.ts", "tests/unit.test.ts"]);
+    });
   });
 
   describe("getPRDiff", () => {
