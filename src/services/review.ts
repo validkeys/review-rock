@@ -1,6 +1,6 @@
 import { Command, CommandExecutor } from "@effect/platform";
 import { NodeCommandExecutor, NodeContext } from "@effect/platform-node";
-import { Context, Effect, Layer, Option } from "effect";
+import { Context, Effect, Layer, Option, Stream } from "effect";
 import {
   AWSTokenExpiredError,
   ClaudeCodeCommandError,
@@ -54,7 +54,7 @@ export interface ReviewService {
 export const ReviewService = Context.GenericTag<ReviewService>("@services/ReviewService");
 
 /**
- * Command and input for claudecode CLI execution
+ * Command and input for claude CLI execution
  */
 interface ClaudeCodeCommand {
   readonly command: ReadonlyArray<string>;
@@ -62,27 +62,78 @@ interface ClaudeCodeCommand {
 }
 
 /**
- * Builds claudecode command array and formats PR context as markdown
+ * Builds claude command array and formats PR review request
+ * Uses Claude's built-in /review command which handles fetching the diff
  * @internal
  */
 export const buildClaudeCodeCommand = (
   prContext: PRContext,
   skillName: string
 ): ClaudeCodeCommand => {
-  const command = ["claudecode", "skill", skillName];
+  // Use bare mode and pre-approve gh CLI commands for the /review command to work
+  // The /review command needs gh to fetch PR details and diff
+  const command = ["claude", "--bare", "--allowed-tools", "Bash(gh:*)"];
 
-  const input = `# PR #${prContext.prNumber} Review Request
+  // Build skill-specific guidance based on PR classification
+  const skillGuidance = buildSkillGuidance(skillName);
 
-**Repository:** ${prContext.repo}
-**PR Title:** ${prContext.details.title}
+  const input = `/review ${prContext.prNumber}
 
-## Changed Files
-${prContext.details.files.join("\n")}
+Repository: ${prContext.repo}
+When using gh commands, always specify: --repo ${prContext.repo}
 
-## Diff
-${prContext.diff}`;
+${skillGuidance}
+
+# Review Guidelines
+
+**Format:**
+- Start with a brief summary (2-3 sentences max)
+- List issues by severity: 🔴 Critical, 🟡 Warning, 🔵 Suggestion
+- For each issue: show the problem code and fixed code side-by-side
+- End with a clear verdict: Approve ✅ / Request Changes ❌ / Comment 💬
+
+**Style:**
+- Be concise - no fluff or verbose explanations
+- Show examples with file:line references
+- Skip minor style issues unless widespread`;
 
   return { command, input };
+};
+
+/**
+ * Builds skill-specific guidance based on the classification
+ * @internal
+ */
+const buildSkillGuidance = (skillName: string): string => {
+  // Parse multiple skills if comma-separated (for mixed PRs)
+  const skills = skillName.split(",").map((s) => s.trim());
+
+  const guidanceMap: Record<string, string> = {
+    "vercel-react-best-practices": `**Frontend Focus:**
+- React/Next.js performance patterns
+- Component composition and reusability
+- Bundle optimization and code splitting
+- Client/Server component boundaries`,
+
+    "typescript-expert": `**Backend Focus:**
+- TypeScript type safety and strict mode compliance
+- Effect framework patterns and error handling
+- API contract definitions with Zod
+- Repository patterns and data access`,
+
+    "vercel-react-native-skills": `**Mobile Focus:**
+- React Native performance optimization
+- Expo best practices
+- Native module integration
+- Mobile-specific patterns`,
+  };
+
+  // Build combined guidance for multiple skills
+  const guidance = skills
+    .map((skill) => guidanceMap[skill] || `**${skill}:** Apply relevant best practices`)
+    .join("\n\n");
+
+  return guidance || "**General:** Review for correctness, security, and maintainability";
 };
 
 /**
@@ -148,7 +199,7 @@ export const detectSkillNotFound = (
 };
 
 /**
- * Helper to execute claudecode command and generate review
+ * Helper to execute claude command and generate review
  */
 const executeGenerateReviewCommand = (
   prContext: PRContext,
@@ -157,6 +208,12 @@ const executeGenerateReviewCommand = (
   Effect.gen(function* () {
     // Build command and input
     const { command, input } = buildClaudeCodeCommand(prContext, skillName);
+
+    // Log command and input for debugging
+    console.log(`\n=== Executing Review Command ===`);
+    console.log(`Command: ${command.join(" ")}`);
+    console.log(`Input length: ${input.length} characters`);
+    console.log(`Input preview:\n${input.substring(0, 200)}...`);
 
     // Create command - Command.make expects the first arg to be the command
     // and the rest to be arguments
@@ -168,13 +225,11 @@ const executeGenerateReviewCommand = (
         })
       );
     }
-    const claudeCommand = Command.make(cmd, ...args);
+    // Convert input string to Stream of Uint8Array for stdin
+    const inputStream = Stream.make(new TextEncoder().encode(input));
+    const claudeCommand = Command.make(cmd, ...args).pipe(Command.stdin(inputStream));
 
-    // TODO: Pipe input to stdin when we implement real subprocess execution
-    // For now, we'll pass the input as an argument or environment variable
-    // This is a simplified version for the initial implementation
-
-    // Execute command and capture stdout
+    // Execute command with stdin piped and capture stdout
     const result = yield* Command.string(claudeCommand).pipe(
       Effect.mapError((error) => {
         const errorMessage = error.message || String(error);
@@ -200,9 +255,24 @@ const executeGenerateReviewCommand = (
       })
     );
 
-    // Note: input will be used when we implement stdin piping
-    // For now this is a placeholder implementation
-    return result || input; // Fallback to input for type safety
+    // Log the result for debugging
+    console.log(`\n=== Review Generated ===`);
+    console.log(`Result length: ${result.length} characters`);
+    console.log(`Result preview:\n${result.substring(0, 500)}...`);
+
+    // Save to file for debugging
+    const fs = yield* Effect.promise(() => import("fs/promises"));
+    const logPath = `/tmp/review-rock-debug-${prContext.prNumber}.md`;
+    yield* Effect.promise(() =>
+      fs.writeFile(
+        logPath,
+        `# Review Debug Log\n\n## Command\n${command.join(" ")}\n\n## Input\n${input}\n\n## Output\n${result}`,
+        "utf-8"
+      )
+    );
+    console.log(`Debug log saved to: ${logPath}`);
+
+    return result;
   });
 
 /**

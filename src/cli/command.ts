@@ -1,48 +1,30 @@
-import { Args, Command, Options } from "@effect/cli";
+import { Command } from "@effect/cli";
 import { Console, Effect } from "effect";
 import { PollingService } from "../services/polling.js";
-
-/**
- * Repository argument for specifying the GitHub repository to review.
- * Format: "owner/repo" (e.g., "validkeys/lumen")
- */
-const repositoryArg = Args.text({ name: "repository" });
-
-/**
- * Optional config file path for custom configuration.
- */
-const configOption = Options.file("config").pipe(Options.optional);
-
-/**
- * Optional polling interval in seconds.
- * How often to check for new PRs that need review.
- */
-const pollingIntervalOption = Options.integer("polling-interval").pipe(Options.optional);
+import { RepositoryService } from "../services/config.js";
 
 /**
  * Main CLI command for review-rock.
  * Automated PR review using Claude via claudecode CLI.
  *
- * Usage:
- *   review-rock <repository>
- *   review-rock validkeys/lumen --config ./custom-config.yaml
- *   review-rock validkeys/lumen --polling-interval 300
+ * Configuration is loaded from review-rock.config.ts in the current directory.
+ * No arguments are required - everything is configured via the config file.
  */
 export const reviewRockCommand = Command.make(
   "review-rock",
-  {
-    repository: repositoryArg,
-    config: configOption,
-    pollingInterval: pollingIntervalOption,
-  },
-  ({ repository }) =>
+  {},
+  () =>
     Effect.gen(function* () {
-      yield* Console.log(`[review-rock] Starting review automation for ${repository}`);
+      // Get repository from RepositoryService
+      const repoService = yield* RepositoryService;
+      const repo = yield* repoService.getRepository;
+
+      yield* Console.log(`[review-rock] Starting review automation for ${repo}`);
 
       const polling = yield* PollingService;
 
       // Start polling - this runs indefinitely
-      yield* polling.startPolling(repository);
+      yield* polling.startPolling(repo);
     })
 ).pipe(
   Command.withDescription(

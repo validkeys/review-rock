@@ -1,7 +1,7 @@
 import { Console, Context, Duration, Effect, Layer, Schedule } from "effect";
+import type { Config } from "../config/schema.js";
 import { processPR } from "../orchestration/workflow.js";
 import { ClassificationService } from "./classification.js";
-import { ConfigService } from "./config.js";
 import { GitHubService } from "./github.js";
 import { ReviewService } from "./review.js";
 
@@ -36,24 +36,29 @@ export const PollingService = Context.GenericTag<PollingService>("@services/Poll
 /**
  * Live implementation of PollingService
  *
- * Uses Effect.repeat with Schedule.spaced to poll GitHub at regular intervals
- * configured via ConfigService. For each unclaimed PR, processes it through
- * the complete review workflow.
+ * Uses Effect.repeat with Schedule.spaced to poll GitHub at regular intervals.
+ * For each unclaimed PR, processes it through the complete review workflow.
+ *
+ * @param config - Preloaded configuration
+ * @returns Layer that provides PollingService
  */
-export const PollingServiceLive = Layer.effect(
+export const makePollingServiceLayer = (config: Config): Layer.Layer<
   PollingService,
-  Effect.gen(function* () {
-    const github = yield* GitHubService;
-    const classification = yield* ClassificationService;
-    const review = yield* ReviewService;
-    const config = yield* ConfigService;
+  never,
+  GitHubService | ClassificationService | ReviewService
+> =>
+  Layer.effect(
+    PollingService,
+    Effect.gen(function* () {
+      const github = yield* GitHubService;
+      const classification = yield* ClassificationService;
+      const review = yield* ReviewService;
 
-    return PollingService.of({
-      startPolling: (repo: string) =>
-        Effect.gen(function* () {
-          // Get configuration
-          const cfg = yield* config.getConfig;
-          const { pollingIntervalMinutes, claimLabel } = cfg;
+      return PollingService.of({
+        startPolling: (repo: string) =>
+          Effect.gen(function* () {
+            // Use preloaded configuration
+            const { pollingIntervalMinutes, claimLabel } = config;
 
           // Define the poll-once effect
           const pollOnce = Effect.gen(function* () {
@@ -76,7 +81,7 @@ export const PollingServiceLive = Layer.effect(
               yield* Console.log(`[PollingService] Processing PR #${pr.number}: ${pr.title}`);
 
               // Process PR with workflow - catch errors to prevent polling from stopping
-              yield* processPR(repo, pr.number, claimLabel).pipe(
+              yield* processPR(repo, pr.number, claimLabel, config).pipe(
                 Effect.provideService(GitHubService, github),
                 Effect.provideService(ClassificationService, classification),
                 Effect.provideService(ReviewService, review),

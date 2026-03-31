@@ -1,6 +1,6 @@
 import { Context, Effect, Layer } from "effect";
+import type { Config } from "../config/schema.js";
 import type { ClassificationResult } from "../types/pr-classification.js";
-import { ConfigService } from "./config.js";
 
 /**
  * Check if a file path matches frontend patterns
@@ -42,26 +42,17 @@ export const ClassificationService = Context.GenericTag<ClassificationService>(
 
 /**
  * Live implementation of ClassificationService
+ *
+ * @param config - Preloaded configuration
+ * @returns Layer that provides ClassificationService
  */
-export const ClassificationServiceLive = Layer.effect(
-  ClassificationService,
-  Effect.gen(function* () {
-    const configService = yield* ConfigService;
-
-    return ClassificationService.of({
+export const makeClassificationServiceLayer = (config: Config): Layer.Layer<ClassificationService> =>
+  Layer.succeed(
+    ClassificationService,
+    ClassificationService.of({
       classifyPR: (changedFiles: ReadonlyArray<string>) =>
         Effect.gen(function* () {
-          const config = yield* configService.getConfig.pipe(
-            Effect.orElse(() =>
-              Effect.succeed({
-                repository: "",
-                pollingIntervalMinutes: 5,
-                claimLabel: "",
-                frontendPaths: [],
-                skills: { frontend: "", backend: "", mixed: "" },
-              })
-            )
-          );
+          // Use preloaded configuration
           const frontendPatterns = config.frontendPaths;
 
           // Separate files into frontend and backend arrays
@@ -96,6 +87,5 @@ export const ClassificationServiceLive = Layer.effect(
             matchedPaths: backendFiles,
           };
         }),
-    });
-  })
-);
+    })
+  );

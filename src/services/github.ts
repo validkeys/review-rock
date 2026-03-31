@@ -309,6 +309,39 @@ const parseFiles = (files: unknown): ReadonlyArray<string> => {
 };
 
 /**
+ * Helper to execute gh pr diff command and get PR diff
+ */
+const executeGetPRDiffCommand = (
+  repo: string,
+  prNumber: number
+): Effect.Effect<string, GitHubCommandError, CommandExecutor.CommandExecutor> =>
+  Effect.gen(function* () {
+    // Execute gh pr diff command
+    const command = Command.make(
+      "gh",
+      "pr",
+      "diff",
+      String(prNumber),
+      "--repo",
+      repo
+    );
+
+    // Run command and get output
+    const diff = yield* Command.string(command).pipe(
+      Effect.mapError(
+        (error) =>
+          new GitHubCommandError({
+            command: "gh pr diff",
+            stderr: error.message || String(error),
+            exitCode: 1,
+          })
+      )
+    );
+
+    return diff;
+  });
+
+/**
  * Helper to execute gh pr view command and get PR details
  */
 const executeGetPRDetailsCommand = (
@@ -407,7 +440,10 @@ export const GitHubServiceLive = Layer.effect(
         executeGetPRDetailsCommand(repo, prNumber).pipe(
           Effect.provideService(CommandExecutor.CommandExecutor, executor)
         ),
-      getPRDiff: () => Effect.dieMessage("Not implemented"),
+      getPRDiff: (repo: string, prNumber: number) =>
+        executeGetPRDiffCommand(repo, prNumber).pipe(
+          Effect.provideService(CommandExecutor.CommandExecutor, executor)
+        ),
     });
   })
 );
