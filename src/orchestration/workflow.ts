@@ -1,4 +1,4 @@
-import { Console, Effect } from "effect";
+import { Effect } from "effect";
 import type { Config } from "../config/schema.js";
 import type {
   GitHubCommandError,
@@ -70,20 +70,24 @@ export const processPR = (
     const classification = yield* ClassificationService;
     const review = yield* ReviewService;
 
+    // Add PR number to all logs in this workflow
+    const logWithPR = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+      effect.pipe(Effect.annotateLogs("pr", prNumber));
+
     // Step 1: Claim the PR
     // If this fails, we should NOT remove the label (PR is already claimed by someone else)
-    yield* Console.log(`[Workflow] Claiming PR #${prNumber} with label: ${label}`);
+    yield* logWithPR(Effect.logInfo(`Claiming PR #${prNumber} with label: ${label}`));
     yield* github.claimPR(repo, prNumber, label);
-    yield* Console.log(`[Workflow] Successfully claimed PR #${prNumber}`);
+    yield* logWithPR(Effect.logInfo(`Successfully claimed PR #${prNumber}`));
 
     // Step 2: Post initial "in progress" comment
-    yield* Console.log(`[Workflow] Posting initial comment to PR #${prNumber}`);
+    yield* logWithPR(Effect.logInfo(`Posting initial comment to PR #${prNumber}`));
     const commentId = yield* github.postCommentWithId(
       repo,
       prNumber,
       "🤖 **review-rock is analyzing this PR...**\n\nGenerating review, please wait..."
     );
-    yield* Console.log(`[Workflow] Posted comment #${commentId} to PR #${prNumber}`);
+    yield* logWithPR(Effect.logInfo(`Posted comment #${commentId}`));
 
     // All subsequent steps run with claim label release on failure
     // This uses acquireRelease pattern: acquire = claim, release = remove label on error
@@ -93,13 +97,13 @@ export const processPR = (
 
       // Step 4: Classify the PR based on changed files
       const classificationResult = yield* classification.classifyPR(details.files);
-      yield* Console.log(
-        `[Workflow] PR #${prNumber} classified as: ${classificationResult.type}`
+      yield* logWithPR(
+        Effect.logInfo(`Classified as: ${classificationResult.type}`)
       );
 
       // Step 5: Select skill based on classification
       const skillName = selectSkillForClassification(classificationResult.type, config);
-      yield* Console.log(`[Workflow] Using skill: ${skillName}`);
+      yield* logWithPR(Effect.logInfo(`Using skill: ${skillName}`));
 
       // Step 6: Generate review using Claude's built-in /review command
       // Claude will fetch the diff itself and handle the review
@@ -114,9 +118,9 @@ export const processPR = (
       );
 
       // Step 7: Update the comment with the review content
-      yield* Console.log(`[Workflow] Updating comment #${commentId} with review content`);
+      yield* logWithPR(Effect.logInfo(`Updating comment #${commentId} with review content`));
       yield* github.updateComment(repo, commentId, reviewContent);
-      yield* Console.log(`[Workflow] Successfully updated comment #${commentId} on PR #${prNumber}`);
+      yield* logWithPR(Effect.logInfo(`Successfully updated comment #${commentId}`));
 
       return reviewContent;
     }).pipe(
@@ -124,7 +128,8 @@ export const processPR = (
       Effect.catchAll((error) =>
         Effect.gen(function* () {
           // Update comment with error message
-          yield* Console.log(`[Workflow] Error occurred, updating comment with error message`);
+          yield* logWithPR(Effect.logError(`Error occurred: ${String(error)}`));
+          yield* logWithPR(Effect.logInfo(`Updating comment with error message`));
           const errorMessage = `❌ **review-rock encountered an error**\n\n${String(error)}\n\nThe PR has been unclaimed and can be retried.`;
           yield* github.updateComment(repo, commentId, errorMessage).pipe(
             // If comment update fails, log but continue
@@ -132,7 +137,7 @@ export const processPR = (
           );
 
           // Remove the label to allow retry
-          yield* Console.log(`[Workflow] Removing claim label from PR #${prNumber}`);
+          yield* logWithPR(Effect.logInfo(`Removing claim label`));
           yield* github.removeLabel(repo, prNumber, label).pipe(
             // If label removal fails, log but don't fail the whole operation
             Effect.catchAll(() => Effect.void)

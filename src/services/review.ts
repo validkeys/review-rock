@@ -210,10 +210,12 @@ const executeGenerateReviewCommand = (
     const { command, input } = buildClaudeCodeCommand(prContext, skillName);
 
     // Log command and input for debugging
-    console.log(`\n=== Executing Review Command ===`);
-    console.log(`Command: ${command.join(" ")}`);
-    console.log(`Input length: ${input.length} characters`);
-    console.log(`Input preview:\n${input.substring(0, 200)}...`);
+    yield* Effect.logDebug(`Executing review command: ${command.join(" ")}`).pipe(
+      Effect.annotateLogs("pr", prContext.prNumber)
+    );
+    yield* Effect.logDebug(`Input length: ${input.length} characters`).pipe(
+      Effect.annotateLogs("pr", prContext.prNumber)
+    );
 
     // Create command - Command.make expects the first arg to be the command
     // and the rest to be arguments
@@ -256,9 +258,9 @@ const executeGenerateReviewCommand = (
     );
 
     // Log the result for debugging
-    console.log(`\n=== Review Generated ===`);
-    console.log(`Result length: ${result.length} characters`);
-    console.log(`Result preview:\n${result.substring(0, 500)}...`);
+    yield* Effect.logInfo(`Review generated, length: ${result.length} characters`).pipe(
+      Effect.annotateLogs("pr", prContext.prNumber)
+    );
 
     // Save to file for debugging
     const fs = yield* Effect.promise(() => import("fs/promises"));
@@ -270,7 +272,9 @@ const executeGenerateReviewCommand = (
         "utf-8"
       )
     );
-    console.log(`Debug log saved to: ${logPath}`);
+    yield* Effect.logDebug(`Debug log saved to: ${logPath}`).pipe(
+      Effect.annotateLogs("pr", prContext.prNumber)
+    );
 
     return result;
   });

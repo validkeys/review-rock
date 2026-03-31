@@ -1,4 +1,4 @@
-import { Console, Context, Duration, Effect, Layer, Schedule } from "effect";
+import { Context, Duration, Effect, Layer, Schedule } from "effect";
 import type { Config } from "../config/schema.js";
 import { processPR } from "../orchestration/workflow.js";
 import { ClassificationService } from "./classification.js";
@@ -62,8 +62,8 @@ export const makePollingServiceLayer = (config: Config): Layer.Layer<
 
           // Define the poll-once effect
           const pollOnce = Effect.gen(function* () {
-            yield* Console.log(
-              `[PollingService] Polling ${repo} for unclaimed PRs (claim label: ${claimLabel})`
+            yield* Effect.logInfo(
+              `Polling ${repo} for unclaimed PRs (claim label: ${claimLabel})`
             );
 
             // Get all open PRs
@@ -72,13 +72,15 @@ export const makePollingServiceLayer = (config: Config): Layer.Layer<
             // Filter out PRs that already have the claim label
             const unclaimedPRs = prs.filter((pr) => !pr.labels.includes(claimLabel));
 
-            yield* Console.log(
-              `[PollingService] Found ${unclaimedPRs.length} unclaimed PRs out of ${prs.length} total`
+            yield* Effect.logInfo(
+              `Found ${unclaimedPRs.length} unclaimed PRs out of ${prs.length} total`
             );
 
             // Process each unclaimed PR through the workflow
             for (const pr of unclaimedPRs) {
-              yield* Console.log(`[PollingService] Processing PR #${pr.number}: ${pr.title}`);
+              yield* Effect.logInfo(`Processing PR #${pr.number}: ${pr.title}`).pipe(
+                Effect.annotateLogs("pr", pr.number)
+              );
 
               // Process PR with workflow - catch errors to prevent polling from stopping
               yield* processPR(repo, pr.number, claimLabel, config).pipe(
@@ -86,14 +88,15 @@ export const makePollingServiceLayer = (config: Config): Layer.Layer<
                 Effect.provideService(ClassificationService, classification),
                 Effect.provideService(ReviewService, review),
                 Effect.tap((reviewContent) =>
-                  Console.log(
-                    `[PollingService] Successfully reviewed PR #${pr.number}, review length: ${reviewContent.length} chars`
-                  )
+                  Effect.logInfo(
+                    `Successfully reviewed, review length: ${reviewContent.length} chars`
+                  ).pipe(Effect.annotateLogs("pr", pr.number))
                 ),
                 Effect.catchAll((error) =>
-                  Console.log(
-                    `[PollingService] Failed to process PR #${pr.number}: ${String(error)}`
-                  ).pipe(Effect.as(undefined))
+                  Effect.logError(`Failed to process: ${String(error)}`).pipe(
+                    Effect.annotateLogs("pr", pr.number),
+                    Effect.as(undefined)
+                  )
                 )
               );
             }

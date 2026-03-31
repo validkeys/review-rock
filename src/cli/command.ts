@@ -1,5 +1,5 @@
 import { Command } from "@effect/cli";
-import { Console, Effect } from "effect";
+import { Effect } from "effect";
 import { PollingService } from "../services/polling.js";
 import { RepositoryService } from "../services/config.js";
 
@@ -19,7 +19,7 @@ export const reviewRockCommand = Command.make(
       const repoService = yield* RepositoryService;
       const repo = yield* repoService.getRepository;
 
-      yield* Console.log(`[review-rock] Starting review automation for ${repo}`);
+      yield* Effect.logInfo(`Starting review automation for ${repo}`);
 
       const polling = yield* PollingService;
 
