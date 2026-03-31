@@ -1,0 +1,420 @@
+milestone: m3
+name: Review Service & Claude Integration
+generated: "2026-03-30T18:00:00Z"
+
+style_anchors:
+  - path: ~/Sites/ai-use-repos/effect/examples/process-command.ts
+    lines: 1-120
+    description: |
+      Example of using @effect/platform Command to spawn subprocesses.
+      Shows proper error handling, stdout/stderr capture, and exit code checking.
+  - path: ~/Sites/ai-use-repos/EffectPatterns/retry-schedule-pattern.ts
+    lines: 1-60
+    description: |
+      Pattern for Effect.retry with Schedule.exponential for resilient operations.
+      Demonstrates backoff strategies and error handling.
+  - path: ~/Sites/ai-use-repos/EffectPatterns/tagged-errors.ts
+    lines: 1-50
+    description: |
+      Pattern for defining and using tagged errors with Data.TaggedError.
+      Shows error matching and recovery strategies.
+
+global_constraints:
+  allowed_patterns:
+    - "Use @effect/platform Command for subprocess execution"
+    - "Use Effect.retry with Schedule.exponential for transient failures"
+    - "Use Data.TaggedError for all error types"
+    - "Parse stderr for specific error patterns (token expiry, skill not found)"
+    - "Use Effect Logger for structured logging"
+  forbidden_patterns:
+    - "Direct child_process calls"
+    - "Swallowing errors without logging"
+    - "Retrying non-transient errors (token expiry, skill not found)"
+    - "Untyped error objects"
+  tdd_required: true
+  max_task_duration_minutes: 150
+  commit_strategy: "Commit after each task"
+
+quality_gates:
+  - stage: pre-commit
+    commands:
+      - pnpm run typecheck
+      - pnpm run lint
+      - pnpm run test
+  - stage: task-completion
+    criteria:
+      - All tests passing
+      - No type errors
+      - Error detection logic tested for all scenarios
+      - Helpful error messages for users
+
+tasks:
+  - id: m3-001
+    name: Define ReviewService interface and error types
+    description: |
+      Create ReviewService interface with generateReview method.
+      Define tagged errors: ReviewGenerationError, AWSTokenExpiredError, SkillNotFoundError.
+    estimate_minutes: 45
+    type: code
+    dependencies: []
+    files:
+      create:
+        - src/services/review.ts
+        - src/errors/review.ts
+        - tests/services/review.test.ts
+      modify: []
+      touch_only: []
+    instructions: |
+      **Objective:**
+      Define ReviewService interface and comprehensive error types.
+
+      **Implementation Steps:**
+      1. Create src/errors/review.ts with tagged errors:
+         - ReviewGenerationError (message, cause)
+         - AWSTokenExpiredError (helpMessage: "Run 'aws sso login' to refresh")
+         - SkillNotFoundError (skillName, helpMessage)
+         - ClaudeCodeCommandError (command, stderr, exitCode)
+      2. Create src/services/review.ts with interface:
+         - generateReview(prContext: PRContext, skillName: string): Effect<string, ReviewError>
+      3. Define PRContext type: { repo: string, prNumber: number, diff: string, details: PRDetails }
+      4. Define ReviewError union: ReviewGenerationError | AWSTokenExpiredError | SkillNotFoundError | ClaudeCodeCommandError
+
+      **Constraints:**
+      - ONLY use Data.TaggedError for all errors
+      - Include helpful user guidance in error messages
+      - Follow pattern in style anchor: ~/Sites/ai-use-repos/EffectPatterns/tagged-errors.ts
+
+      **TDD Checklist:**
+      - [ ] Write test stub (implementation in next tasks)
+      - [ ] Verify error types compile correctly
+      - [ ] Verify service interface compiles
+
+      **Validation:**
+      ```bash
+      pnpm run typecheck
+      ```
+      Expected: Interface and error types compile successfully
+
+      **Drift Policy:**
+      If Data.TaggedError structure differs, update to match Effect version.
+
+    validation:
+      commands:
+        - pnpm run typecheck
+      expected_output: "No type errors"
+      on_failure: "Review error type definitions"
+
+  - id: m3-002
+    name: Implement claudecode CLI command builder
+    description: |
+      Create helper function to build claudecode command with skill name and PR context.
+      Format context as markdown for Claude to process.
+    estimate_minutes: 60
+    type: code
+    dependencies: [m3-001]
+    files:
+      create: []
+      modify:
+        - src/services/review.ts
+        - tests/services/review.test.ts
+      touch_only:
+        - src/errors/review.ts
+    instructions: |
+      **Objective:**
+      Build claudecode CLI command with proper context formatting.
+
+      **Implementation Steps:**
+      1. Add private helper buildClaudeCodeCommand:
+         - Accept skillName: string and prContext: PRContext
+         - Build command array: ["claudecode", "skill", skillName]
+         - Format PR context as markdown string:
+           ```
+           # PR #${prNumber} Review Request
+
+           **Repository:** ${repo}
+           **PR Title:** ${details.title}
+
+           ## Changed Files
+           ${details.files.join('\n')}
+
+           ## Diff
+           ${diff}
+           ```
+         - Return { command: string[], input: string }
+      2. Add unit tests for command building and context formatting
+
+      **Constraints:**
+      - Use template literals for markdown formatting
+      - NO external template libraries
+      - Keep markdown simple and readable for Claude
+
+      **TDD Checklist:**
+      - [ ] Write test for command array construction
+      - [ ] Write test for markdown context formatting
+      - [ ] Write test with special characters in PR title
+      - [ ] Implement buildClaudeCodeCommand to pass tests
+
+      **Validation:**
+      ```bash
+      pnpm test tests/services/review.test.ts -- buildClaudeCodeCommand
+      ```
+      Expected: Command builder tests pass
+
+      **Drift Policy:**
+      If claudecode CLI interface changes, update command builder.
+
+    validation:
+      commands:
+        - pnpm test tests/services/review.test.ts
+      expected_output: "Command builder tests pass"
+      on_failure: "Review command formatting logic"
+
+  - id: m3-003
+    name: Implement error pattern detection for AWS SSO token expiry
+    description: |
+      Create helper to detect AWS SSO token expiry from claudecode stderr output.
+      Return AWSTokenExpiredError with helpful guidance.
+    estimate_minutes: 60
+    type: code
+    dependencies: [m3-002]
+    files:
+      create: []
+      modify:
+        - src/services/review.ts
+        - tests/services/review.test.ts
+      touch_only:
+        - src/errors/review.ts
+    instructions: |
+      **Objective:**
+      Detect AWS SSO token expiry and provide clear re-auth guidance.
+
+      **Implementation Steps:**
+      1. Add private helper detectAWSTokenExpiry:
+         - Accept stderr: string
+         - Check for patterns:
+           - "token has expired"
+           - "credentials have expired"
+           - "SSO session has expired"
+         - Return Option<AWSTokenExpiredError>
+      2. Add unit tests for:
+         - Token expiry detection (various error message formats)
+         - Non-expiry errors (should return None)
+      3. Ensure AWSTokenExpiredError includes: "AWS SSO token expired. Run 'aws sso login' to refresh."
+
+      **Constraints:**
+      - Use string includes for pattern matching (no regex for MVP)
+      - Return Option.some(error) or Option.none()
+      - Make pattern list extensible (easy to add more patterns)
+
+      **TDD Checklist:**
+      - [ ] Write test for "token has expired" message
+      - [ ] Write test for "credentials have expired" message
+      - [ ] Write test for non-token error
+      - [ ] Implement detectAWSTokenExpiry to pass tests
+      - [ ] Verify helpful error message is included
+
+      **Validation:**
+      ```bash
+      pnpm test tests/services/review.test.ts -- detectAWSTokenExpiry
+      ```
+      Expected: Error detection tests pass
+
+      **Drift Policy:**
+      If actual AWS error messages differ, update pattern list.
+      Document patterns in comments for maintainability.
+
+    validation:
+      commands:
+        - pnpm test tests/services/review.test.ts
+      expected_output: "Token expiry detection tests pass"
+      on_failure: "Review error pattern matching logic"
+
+  - id: m3-004
+    name: Implement error pattern detection for skill not found
+    description: |
+      Create helper to detect skill not found errors from claudecode stderr.
+      Return SkillNotFoundError with installation guidance.
+    estimate_minutes: 60
+    type: code
+    dependencies: [m3-003]
+    files:
+      create: []
+      modify:
+        - src/services/review.ts
+        - tests/services/review.test.ts
+      touch_only:
+        - src/errors/review.ts
+    instructions: |
+      **Objective:**
+      Detect skill not found errors and guide user to install skill.
+
+      **Implementation Steps:**
+      1. Add private helper detectSkillNotFound:
+         - Accept stderr: string and skillName: string
+         - Check for patterns:
+           - "skill not found"
+           - "no such skill"
+           - `'${skillName}' does not exist`
+         - Return Option<SkillNotFoundError>
+      2. Add unit tests for:
+         - Skill not found detection
+         - Different error message formats
+         - Non-skill errors (should return None)
+      3. Include helpful message: "Skill '${skillName}' not found. Install with: claudecode skill add <skill-url>"
+
+      **Constraints:**
+      - Use string includes for pattern matching
+      - Return Option type for composability
+      - Include skill name in error for clarity
+
+      **TDD Checklist:**
+      - [ ] Write test for "skill not found" message
+      - [ ] Write test for skill-specific error
+      - [ ] Write test for non-skill error
+      - [ ] Implement detectSkillNotFound to pass tests
+
+      **Validation:**
+      ```bash
+      pnpm test tests/services/review.test.ts -- detectSkillNotFound
+      ```
+      Expected: Skill detection tests pass
+
+      **Drift Policy:**
+      If claudecode error messages change, update patterns.
+
+    validation:
+      commands:
+        - pnpm test tests/services/review.test.ts
+      expected_output: "Skill not found detection tests pass"
+      on_failure: "Review skill error pattern matching"
+
+  - id: m3-005
+    name: Implement ReviewService.generateReview with subprocess execution
+    description: |
+      Implement complete generateReview method: spawn claudecode subprocess,
+      capture output, detect errors, and return review content or typed errors.
+    estimate_minutes: 120
+    type: code
+    dependencies: [m3-004]
+    files:
+      create: []
+      modify:
+        - src/services/review.ts
+        - tests/services/review.test.ts
+      touch_only:
+        - src/errors/review.ts
+    instructions: |
+      **Objective:**
+      Implement full ReviewService with claudecode subprocess execution and error handling.
+
+      **Implementation Steps:**
+      1. Implement ReviewServiceLive:
+         - Use Command.make from @effect/platform to build command
+         - Pipe PR context markdown to stdin
+         - Capture stdout (review content) and stderr (errors)
+         - On non-zero exit code:
+           a. Check detectAWSTokenExpiry(stderr) → return AWSTokenExpiredError
+           b. Check detectSkillNotFound(stderr, skillName) → return SkillNotFoundError
+           c. Otherwise → return ClaudeCodeCommandError
+         - On success: return stdout as review content
+         - Use Effect.retry with Schedule.exponential for transient failures (NOT token expiry or skill errors)
+      2. Add comprehensive unit tests with mocked Command:
+         - Successful review generation
+         - AWS token expiry error
+         - Skill not found error
+         - Generic command error
+         - Retry on transient failure
+
+      **Constraints:**
+      - ONLY use @effect/platform Command for subprocess
+      - Follow pattern in style anchor: ~/Sites/ai-use-repos/effect/examples/process-command.ts
+      - DO NOT retry non-transient errors (token expiry, skill not found)
+      - Use Effect.retry with custom policy: retry on exit codes 124, 500-599 only
+
+      **TDD Checklist:**
+      - [ ] Write test for successful review generation (mock stdout)
+      - [ ] Write test for AWS token expiry error
+      - [ ] Write test for skill not found error
+      - [ ] Write test for generic command error
+      - [ ] Write test for retry logic (transient failure → success)
+      - [ ] Implement generateReview to pass all tests
+      - [ ] Verify no retry on non-transient errors
+
+      **Validation:**
+      ```bash
+      pnpm test tests/services/review.test.ts
+      ```
+      Expected: All ReviewService tests pass
+
+      **Drift Policy:**
+      If Command API differs, update to match @effect/platform version.
+      If retry behavior causes issues, STOP and document actual behavior.
+
+    validation:
+      commands:
+        - pnpm test tests/services/review.test.ts
+        - pnpm run typecheck
+      expected_output: "All tests pass and types check"
+      on_failure: "Review subprocess execution and error handling logic"
+
+  - id: m3-006
+    name: Add integration test for ReviewService with mock claudecode
+    description: |
+      Create integration test that simulates claudecode CLI behavior
+      with test script to verify end-to-end review generation flow.
+    estimate_minutes: 75
+    type: test
+    dependencies: [m3-005]
+    files:
+      create:
+        - tests/integration/review.integration.test.ts
+        - tests/fixtures/mock-claudecode.sh
+      modify: []
+      touch_only:
+        - src/services/review.ts
+    instructions: |
+      **Objective:**
+      Verify ReviewService works correctly with simulated claudecode behavior.
+
+      **Implementation Steps:**
+      1. Create tests/fixtures/mock-claudecode.sh:
+         - Accept skill name as argument
+         - Read stdin (PR context)
+         - Return mock review output on stdout
+         - Support failure modes via environment variables:
+           - MOCK_TOKEN_EXPIRED=1 → output token expiry error to stderr, exit 1
+           - MOCK_SKILL_NOT_FOUND=1 → output skill not found error to stderr, exit 1
+      2. Create integration test:
+         - Set command to use mock-claudecode.sh instead of real claudecode
+         - Test successful review generation
+         - Test token expiry error detection
+         - Test skill not found error detection
+      3. Use Effect.provide to wire ReviewService with test configuration
+
+      **Constraints:**
+      - Mock script should behave like real claudecode
+      - Test both success and error scenarios
+      - Use environment variables to control mock behavior
+
+      **TDD Checklist:**
+      - [ ] Write mock script with success mode
+      - [ ] Add token expiry mode to mock
+      - [ ] Add skill not found mode to mock
+      - [ ] Write integration test for each mode
+      - [ ] Run tests to validate
+
+      **Validation:**
+      ```bash
+      chmod +x tests/fixtures/mock-claudecode.sh
+      pnpm test tests/integration/review.integration.test.ts
+      ```
+      Expected: Integration tests pass with mock claudecode
+
+      **Drift Policy:**
+      If mock behavior diverges from real claudecode, update mock script.
+
+    validation:
+      commands:
+        - pnpm test tests/integration/review.integration.test.ts
+      expected_output: "Integration tests pass"
+      on_failure: "Review mock script and test setup"

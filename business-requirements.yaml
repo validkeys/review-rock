@@ -1,0 +1,281 @@
+project: Review Rock
+version: "1.0.0"
+generated: "2026-03-30T17:00:00Z"
+
+overview:
+  problem: |
+    Developers spend too much time manually reviewing PRs, creating bottlenecks
+    in the development workflow. The manual review process is slow, inconsistent,
+    and prevents teams from scaling their code review capacity efficiently.
+
+  value_proposition: |
+    Review Rock uses Claude models through AWS Bedrock to automatically review
+    pull requests with intelligent, contextual feedback. The system can run on
+    multiple developer machines simultaneously, monitoring repositories for new
+    PRs and providing fast, consistent review feedback.
+
+  scope:
+    in_scope:
+      - Poll GitHub repository for new pull requests
+      - Claim PRs using GitHub labels to prevent duplicate reviews
+      - Classify PRs as frontend, backend, or mixed based on file paths
+      - Select appropriate Claude skills based on PR type
+      - Generate automated code reviews using AWS Bedrock
+      - Post review comments to GitHub PRs
+      - Run on multiple machines with distributed coordination
+      - Basic logging and error tracking
+      - Configurable paths, skills, and polling intervals
+
+    out_of_scope:
+      - Microsoft Teams notifications (post-MVP)
+      - External database or lock services
+      - Complex dashboard or web UI
+      - Integration with other platforms (Slack, Jira, etc.)
+      - Custom AI model training or fine-tuning
+
+personas:
+  - name: Senior Developer
+    description: Experienced developer who reviews PRs and wants to reduce manual workload
+    goals:
+      - Reduce time spent on routine PR reviews
+      - Maintain high code quality standards
+      - Catch bugs and security issues early
+      - Focus on complex architectural decisions
+    pain_points:
+      - Slow feedback loops delay merges
+      - Inconsistent review quality across team
+      - PR review becomes a bottleneck
+      - Context switching overhead from manual reviews
+
+  - name: Tech Lead
+    description: Team leader responsible for code quality and team productivity
+    goals:
+      - Increase PR throughput across the team
+      - Ensure consistent review standards
+      - Free up senior developers for strategic work
+      - Maintain visibility into review process
+    pain_points:
+      - Limited review bandwidth slows delivery
+      - Inconsistent review depth across reviewers
+      - No automated checks for common issues
+      - Difficulty scaling review capacity
+
+use_cases:
+  - name: Automated PR Review
+    actor: Review Rock Script
+    description: |
+      Script polls GitHub repository every 5 minutes, detects new unclaimed PRs,
+      claims a PR by applying a label, analyzes changed files to classify PR type
+      (frontend/backend/mixed), selects appropriate review skills, calls AWS Bedrock
+      with Claude to perform the review, and posts review comments back to GitHub.
+    outcome: PR receives automated review feedback within 5-10 minutes of creation
+
+  - name: Distributed Review Coordination
+    actor: Multiple Review Rock Instances
+    description: |
+      Multiple machines run Review Rock simultaneously. When a machine finds an
+      unclaimed PR, it attempts to apply a claim label. GitHub's atomic label
+      operations prevent duplicate claims. Only the machine that successfully
+      applies the label proceeds with the review.
+    outcome: PRs are reviewed exactly once despite multiple running instances
+
+  - name: PR Type Classification
+    actor: Review Rock Script
+    description: |
+      Script analyzes the list of changed files in a PR. Files in apps/react-webapp
+      or lib/core-ui-system are classified as frontend. All other files are backend.
+      If both frontend and backend files are changed, PR is classified as mixed.
+    outcome: Correct review skills are selected based on PR type
+
+functional_requirements:
+  - id: FR-1
+    category: GitHub Integration
+    description: Poll GitHub repository for open PRs every 5 minutes
+    priority: high
+    rationale: Core polling mechanism drives the entire automation workflow
+
+  - id: FR-2
+    category: GitHub Integration
+    description: Use GitHub CLI (gh) for all GitHub API operations
+    priority: high
+    rationale: Leverage existing gh auth and simplify authentication
+
+  - id: FR-3
+    category: Coordination
+    description: Claim unclaimed PRs by applying a GitHub label atomically
+    priority: high
+    rationale: Prevents duplicate reviews when multiple instances are running
+
+  - id: FR-4
+    category: Classification
+    description: Classify PR type as frontend, backend, or mixed based on changed file paths
+    priority: high
+    rationale: Different PR types require different review skills and focus areas
+
+  - id: FR-5
+    category: Classification
+    description: Treat files in apps/react-webapp and lib/core-ui-system as frontend code
+    priority: high
+    rationale: Specific path mapping for validkeys/lumen repository structure
+
+  - id: FR-6
+    category: Review Generation
+    description: Select review skills based on PR type (frontend → frontend skills, backend → backend skills, mixed → both)
+    priority: high
+    rationale: Ensures appropriate review criteria are applied to each PR
+
+  - id: FR-7
+    category: Review Generation
+    description: Call AWS Bedrock with Claude model to generate code review
+    priority: high
+    rationale: Core AI-powered review capability
+
+  - id: FR-8
+    category: Review Generation
+    description: Use pre-existing AWS environment variables for Bedrock authentication
+    priority: high
+    rationale: Simplifies setup by leveraging existing AWS credentials
+
+  - id: FR-9
+    category: GitHub Integration
+    description: Post review comments to GitHub PR
+    priority: high
+    rationale: Makes review feedback visible to developers
+
+  - id: FR-10
+    category: Configuration
+    description: Accept repository as command-line argument (e.g., ./review-rock validkeys/lumen)
+    priority: high
+    rationale: Allows script to target different repositories
+
+  - id: FR-11
+    category: Error Handling
+    description: Retry failed operations with exponential backoff
+    priority: high
+    rationale: Handles transient API failures gracefully
+
+  - id: FR-12
+    category: Monitoring
+    description: Log all operations and errors for debugging and monitoring
+    priority: medium
+    rationale: Enables troubleshooting and performance analysis
+
+  - id: FR-13
+    category: Configuration
+    description: Support configurable polling intervals, paths, and skill mappings
+    priority: medium
+    rationale: Allows customization for different team needs
+
+non_functional_requirements:
+  performance:
+    - Complete PR review within 5-10 minutes of PR creation
+    - Support multiple concurrent running instances without conflicts
+    - Handle GitHub API rate limits gracefully
+
+  security:
+    - Use existing GitHub CLI authentication (no credential storage)
+    - Use existing AWS credentials from environment variables
+    - Do not expose sensitive data in logs or comments
+
+  usability:
+    - Simple command-line interface
+    - Clear logging output for monitoring
+    - Minimal configuration required
+
+  reliability:
+    - Gracefully handle API failures and network issues
+    - Release claim labels on fatal errors
+    - Resume polling after transient failures
+
+  maintainability:
+    - Clean separation between GitHub, classification, and review logic
+    - Configurable skill mappings without code changes
+    - Clear error messages and logging
+
+success_criteria:
+  - criterion: Increased PR throughput
+    metric: Number of PRs reviewed per day
+    target: 2-3x increase in PRs reviewed compared to manual-only reviews
+
+  - criterion: Faster feedback loops
+    metric: Time from PR creation to first review
+    target: Under 10 minutes for automated reviews
+
+  - criterion: Reduced manual review time
+    metric: Developer hours spent on PR reviews
+    target: 50% reduction in time spent on routine reviews
+
+  - criterion: System reliability
+    metric: Successful review completion rate
+    target: >95% of PRs receive automated review without errors
+
+constraints:
+  technical:
+    - Must use AWS Bedrock for Claude API access
+    - Must use GitHub CLI for GitHub operations
+    - Must run on developer machines (distributed deployment)
+    - Must work with validkeys/lumen repository structure
+
+  business:
+    - MVP delivery within 2-4 weeks
+    - No additional external services or databases
+    - Use existing authentication mechanisms
+
+  timeline:
+    - MVP launch: 2-4 weeks from project start
+    - Core functionality prioritized over advanced features
+
+dependencies:
+  external:
+    - GitHub CLI (gh) must be installed and authenticated
+    - AWS Bedrock access with Claude models enabled
+    - AWS credentials configured in environment variables
+    - Network access to GitHub API and AWS Bedrock
+
+  internal:
+    - Frontend review skills/prompts for Claude
+    - Backend review skills/prompts for Claude
+    - Path classification logic for repository structure
+
+timeline:
+  phase: MVP Development
+  duration: 2-4 weeks
+  milestones:
+    - Week 1: GitHub polling and PR claiming mechanism
+    - Week 2: PR classification and skill selection logic
+    - Week 3: AWS Bedrock integration and review generation
+    - Week 4: Error handling, logging, and testing
+
+assumptions:
+  - Teams use GitHub for pull request workflows
+  - Developers have AWS credentials configured locally
+  - GitHub CLI is installed and authenticated on developer machines
+  - PRs follow standard structure with clear file change lists
+  - Claude models available through AWS Bedrock are suitable for code review
+  - GitHub label operations are atomic (prevent race conditions)
+
+risks:
+  - risk: Multiple instances claim same PR despite label locking
+    probability: low
+    impact: medium
+    mitigation: Use GitHub label operations which are atomic; add timestamp checks
+
+  - risk: AWS Bedrock API rate limits or throttling
+    probability: medium
+    impact: medium
+    mitigation: Implement exponential backoff; monitor usage; adjust polling frequency
+
+  - risk: GitHub API rate limits with multiple instances
+    probability: medium
+    impact: medium
+    mitigation: Use authenticated gh CLI (higher limits); implement rate limit handling
+
+  - risk: Review quality not meeting team standards
+    probability: medium
+    impact: high
+    mitigation: Iterate on prompt engineering; allow skill customization; keep human reviewers in loop
+
+  - risk: Cost overruns from AWS Bedrock usage
+    probability: low
+    impact: medium
+    mitigation: Monitor API usage; set up billing alerts; optimize prompt length

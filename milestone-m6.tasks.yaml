@@ -1,0 +1,469 @@
+milestone: m6
+name: Documentation & Release Preparation
+generated: "2026-03-30T18:00:00Z"
+
+style_anchors:
+  - path: ~/Sites/ai-use-repos/effect/README.md
+    lines: 1-200
+    description: |
+      Example of clear README with installation, quick start, and examples.
+      Shows how to document Effect-based projects effectively.
+
+global_constraints:
+  allowed_patterns:
+    - "Clear installation instructions"
+    - "Quick start examples"
+    - "Troubleshooting guide for common issues"
+    - "API documentation where appropriate"
+    - "Markdown formatting with code blocks"
+  forbidden_patterns:
+    - "Incomplete setup instructions"
+    - "Missing prerequisites"
+    - "Unclear error messages in troubleshooting"
+  tdd_required: false
+  max_task_duration_minutes: 150
+  commit_strategy: "Commit after each task"
+
+quality_gates:
+  - stage: pre-commit
+    commands:
+      - pnpm run typecheck
+      - pnpm run lint
+      - pnpm run build
+  - stage: task-completion
+    criteria:
+      - README is complete and clear
+      - Configuration examples work
+      - Package is ready for publishing
+
+tasks:
+  - id: m6-001
+    name: Write comprehensive README.md
+    description: |
+      Create complete README with project overview, installation,
+      setup, usage, configuration, and troubleshooting sections.
+    estimate_minutes: 90
+    type: docs
+    dependencies: []
+    files:
+      create: []
+      modify:
+        - README.md
+      touch_only: []
+    instructions: |
+      **Objective:**
+      Write user-friendly README that guides setup and usage.
+
+      **Implementation Steps:**
+      1. Update README.md with complete sections:
+         - Overview: What is Review Rock, why use it
+         - Features: Automated reviews, distributed coordination, AWS Bedrock integration
+         - Prerequisites:
+           - Node.js ≥18
+           - pnpm ≥8
+           - GitHub CLI (gh) installed and authenticated
+           - claudecode CLI installed and authenticated
+           - AWS credentials configured (for claudecode)
+         - Installation:
+           ```bash
+           pnpm install -g review-rock
+           ```
+         - Quick Start:
+           ```bash
+           # Configure (copy and edit example config)
+           cp node_modules/review-rock/review-rock.config.example.ts review-rock.config.ts
+
+           # Run Review Rock
+           review-rock validkeys/lumen
+           ```
+         - Configuration: Explain each config option
+         - How It Works: Polling, claiming, classification, review, comment
+         - Troubleshooting: Common errors and solutions
+         - Contributing: How to contribute (post-MVP)
+         - License: MIT
+
+      **Constraints:**
+      - Use clear, concise language
+      - Include code examples with syntax highlighting
+      - Document all prerequisites clearly
+      - Follow markdown best practices
+
+      **TDD Checklist:**
+      - N/A (documentation)
+
+      **Validation:**
+      ```bash
+      cat README.md
+      # Verify all sections are present and clear
+      ```
+      Expected: README is comprehensive and user-friendly
+
+      **Drift Policy:**
+      N/A
+
+    validation:
+      commands:
+        - test -f README.md
+        - grep -q "Installation" README.md
+        - grep -q "Quick Start" README.md
+      expected_output: "README exists with required sections"
+      on_failure: "Complete missing README sections"
+
+  - id: m6-002
+    name: Create detailed configuration documentation
+    description: |
+      Document all configuration options in review-rock.config.example.ts
+      with examples and explanations.
+    estimate_minutes: 60
+    type: docs
+    dependencies: [m6-001]
+    files:
+      create: []
+      modify:
+        - review-rock.config.example.ts
+      touch_only: []
+    instructions: |
+      **Objective:**
+      Provide well-documented configuration example.
+
+      **Implementation Steps:**
+      1. Update review-rock.config.example.ts with:
+         - Detailed JSDoc comments for each field
+         - Examples for common scenarios:
+           - Single repository monitoring
+           - Custom frontend path patterns
+           - Different polling intervals
+           - Multiple skill configurations
+         - Notes about defaults and optional fields
+         - Link to skill installation documentation
+      2. Add configuration schema reference
+      3. Document environment variable overrides:
+         - REVIEW_ROCK_REPOSITORY
+         - REVIEW_ROCK_POLLING_INTERVAL
+         - REVIEW_ROCK_CLAIM_LABEL
+
+      **Constraints:**
+      - Every field must have clear explanation
+      - Include practical examples
+      - Mention validation rules (e.g., pollingIntervalMinutes > 0)
+
+      **TDD Checklist:**
+      - N/A (documentation)
+
+      **Validation:**
+      ```bash
+      pnpm run typecheck review-rock.config.example.ts
+      ```
+      Expected: Example config type checks and has clear comments
+
+      **Drift Policy:**
+      If config schema changes, update example immediately.
+
+    validation:
+      commands:
+        - pnpm run typecheck
+      expected_output: "Example config type checks successfully"
+      on_failure: "Fix type errors in example config"
+
+  - id: m6-003
+    name: Write troubleshooting guide
+    description: |
+      Create comprehensive troubleshooting guide for common issues:
+      token expiry, skill not found, rate limits, network errors.
+    estimate_minutes: 75
+    type: docs
+    dependencies: [m6-002]
+    files:
+      create:
+        - TROUBLESHOOTING.md
+      modify: []
+      touch_only: []
+    instructions: |
+      **Objective:**
+      Help users diagnose and fix common problems.
+
+      **Implementation Steps:**
+      1. Create TROUBLESHOOTING.md with sections:
+
+         **AWS SSO Token Expired**
+         - Symptom: Error "AWS SSO token expired"
+         - Cause: Tokens expire after 1 hour
+         - Solution: Run `aws sso login` to refresh
+         - Prevention: Set up longer session durations in AWS IAM Identity Center
+
+         **Skill Not Found**
+         - Symptom: Error "Skill 'X' not found"
+         - Cause: Skill not installed in claudecode
+         - Solution: Install skill with `claudecode skill add <skill-url>`
+         - Verification: List skills with `claudecode skill list`
+
+         **GitHub Rate Limit**
+         - Symptom: Error "API rate limit exceeded"
+         - Cause: Too many API calls
+         - Solution: Wait for rate limit reset, reduce polling frequency
+         - Prevention: Use authenticated gh CLI (higher limits)
+
+         **Multiple Instances Claiming Same PR**
+         - Symptom: Duplicate reviews posted
+         - Cause: Race condition (should be rare)
+         - Solution: Check label operations are atomic, verify GitHub API behavior
+         - Mitigation: Add timestamp to claim label
+
+         **Command Not Found: review-rock**
+         - Symptom: Command not found after installation
+         - Cause: pnpm global bin not in PATH
+         - Solution: Add pnpm bin to PATH or use `pnpm exec review-rock`
+
+         **Command Not Found: gh**
+         - Symptom: Error "gh command not found"
+         - Cause: GitHub CLI not installed
+         - Solution: Install gh from https://cli.github.com/
+
+         **Permission Denied on GitHub**
+         - Symptom: Error when posting comment
+         - Cause: gh not authenticated or insufficient permissions
+         - Solution: Run `gh auth login` and verify repository access
+
+      **Constraints:**
+      - Each issue: symptom, cause, solution, prevention
+      - Include actual error messages users will see
+      - Provide commands to fix issues
+
+      **TDD Checklist:**
+      - N/A (documentation)
+
+      **Validation:**
+      ```bash
+      cat TROUBLESHOOTING.md
+      ```
+      Expected: Comprehensive troubleshooting guide
+
+      **Drift Policy:**
+      Add new issues as they are discovered in testing.
+
+    validation:
+      commands:
+        - test -f TROUBLESHOOTING.md
+        - grep -q "AWS SSO Token Expired" TROUBLESHOOTING.md
+      expected_output: "Troubleshooting guide exists with common issues"
+      on_failure: "Complete troubleshooting guide"
+
+  - id: m6-004
+    name: Create CHANGELOG.md for initial release
+    description: |
+      Document initial release features and version 0.1.0 changelog.
+    estimate_minutes: 30
+    type: docs
+    dependencies: [m6-003]
+    files:
+      create:
+        - CHANGELOG.md
+      modify: []
+      touch_only: []
+    instructions: |
+      **Objective:**
+      Document initial release and establish changelog format.
+
+      **Implementation Steps:**
+      1. Create CHANGELOG.md following Keep a Changelog format:
+
+         # Changelog
+
+         All notable changes to this project will be documented in this file.
+
+         The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+         and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+         ## [0.1.0] - 2026-03-XX
+
+         ### Added
+         - Initial release of Review Rock
+         - Automated PR review using Claude via AWS Bedrock
+         - GitHub polling with 5-minute intervals
+         - Distributed coordination via GitHub labels
+         - PR classification (frontend/backend/mixed) based on file paths
+         - Skill selection based on PR type
+         - AWS SSO token expiry detection
+         - Skill not found error detection
+         - Retry logic with exponential backoff
+         - Structured logging with Effect Logger
+         - Effect-TS service architecture
+         - CLI tool for running Review Rock
+
+         ### Known Limitations
+         - No Microsoft Teams notifications (planned for future release)
+         - No web UI or dashboard
+         - Manual configuration required
+         - In-memory only (no persistent state)
+
+      **Constraints:**
+      - Follow Keep a Changelog format
+      - Use semantic versioning
+      - Include all major features
+
+      **TDD Checklist:**
+      - N/A (documentation)
+
+      **Validation:**
+      ```bash
+      cat CHANGELOG.md
+      ```
+      Expected: Changelog documents initial release
+
+      **Drift Policy:**
+      Update changelog for all future releases.
+
+    validation:
+      commands:
+        - test -f CHANGELOG.md
+        - grep -q "0.1.0" CHANGELOG.md
+      expected_output: "Changelog exists with initial release"
+      on_failure: "Create changelog"
+
+  - id: m6-005
+    name: Prepare package.json for npm publishing
+    description: |
+      Update package.json metadata for npm publishing: description,
+      keywords, repository, author, license, homepage.
+    estimate_minutes: 45
+    type: config
+    dependencies: [m6-004]
+    files:
+      create: []
+      modify:
+        - package.json
+      touch_only: []
+    instructions: |
+      **Objective:**
+      Complete package.json metadata for professional npm package.
+
+      **Implementation Steps:**
+      1. Update package.json:
+         - name: "review-rock" (verify availability on npm)
+         - version: "0.1.0"
+         - description: "Automated PR review using Claude AI via AWS Bedrock with distributed coordination"
+         - keywords: ["github", "pr", "review", "claude", "ai", "bedrock", "automation", "effect-ts"]
+         - author: "Your Name <your.email@example.com>"
+         - license: "MIT"
+         - repository: {
+             "type": "git",
+             "url": "https://github.com/yourusername/review-rock.git"
+           }
+         - homepage: "https://github.com/yourusername/review-rock#readme"
+         - bugs: "https://github.com/yourusername/review-rock/issues"
+         - engines: {
+             "node": ">=18.0.0",
+             "pnpm": ">=8.0.0"
+           }
+         - files: ["dist/", "review-rock.config.example.ts", "README.md", "LICENSE", "CHANGELOG.md"]
+      2. Verify package name is available: `npm view review-rock`
+      3. Add prepublishOnly script: "pnpm run build && pnpm run test"
+
+      **Constraints:**
+      - Verify npm package name availability before finalizing
+      - Include only necessary files in npm package
+      - Set minimum Node.js and pnpm versions
+
+      **TDD Checklist:**
+      - N/A (configuration)
+
+      **Validation:**
+      ```bash
+      pnpm run typecheck
+      pnpm run build
+      npm pack --dry-run
+      ```
+      Expected: Package can be built and packed successfully
+
+      **Drift Policy:**
+      If package name is taken, choose alternative name and update throughout project.
+
+    validation:
+      commands:
+        - pnpm run build
+        - test -d dist
+      expected_output: "Package builds successfully"
+      on_failure: "Fix build errors before publishing"
+
+  - id: m6-006
+    name: Create release checklist and publish instructions
+    description: |
+      Document step-by-step release process for publishing to npm
+      and distributing to users.
+    estimate_minutes: 30
+    type: docs
+    dependencies: [m6-005]
+    files:
+      create:
+        - RELEASE.md
+      modify: []
+      touch_only: []
+    instructions: |
+      **Objective:**
+      Provide clear instructions for releasing new versions.
+
+      **Implementation Steps:**
+      1. Create RELEASE.md with release checklist:
+
+         # Release Checklist
+
+         ## Pre-Release
+         - [ ] All tests passing: `pnpm test`
+         - [ ] Coverage ≥80%: `pnpm test:coverage`
+         - [ ] No type errors: `pnpm run typecheck`
+         - [ ] No lint errors: `pnpm run lint`
+         - [ ] Build succeeds: `pnpm run build`
+         - [ ] Manual smoke test completed (tests/e2e/smoke-test.md)
+         - [ ] CHANGELOG.md updated with new version
+         - [ ] package.json version bumped
+
+         ## Publishing to npm
+         ```bash
+         # Verify you're logged in to npm
+         npm whoami
+
+         # Dry run to verify package contents
+         npm pack --dry-run
+
+         # Publish to npm
+         pnpm publish --access public
+
+         # Verify package is available
+         npm view review-rock
+         ```
+
+         ## Post-Release
+         - [ ] Tag release in git: `git tag v0.1.0 && git push --tags`
+         - [ ] Create GitHub release with changelog
+         - [ ] Test global installation: `pnpm install -g review-rock`
+         - [ ] Update documentation if needed
+
+         ## Rollback (if needed)
+         ```bash
+         # Deprecate version (cannot unpublish after 72h)
+         npm deprecate review-rock@0.1.0 "Use version X.X.X instead"
+         ```
+
+      **Constraints:**
+      - Follow npm publishing best practices
+      - Include verification steps
+      - Document rollback procedure
+
+      **TDD Checklist:**
+      - N/A (documentation)
+
+      **Validation:**
+      ```bash
+      cat RELEASE.md
+      ```
+      Expected: Release checklist is complete and actionable
+
+      **Drift Policy:**
+      Update release process as we discover improvements.
+
+    validation:
+      commands:
+        - test -f RELEASE.md
+        - grep -q "npm publish" RELEASE.md
+      expected_output: "Release checklist exists"
+      on_failure: "Create release documentation"

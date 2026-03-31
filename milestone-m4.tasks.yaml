@@ -1,0 +1,427 @@
+milestone: m4
+name: CLI Entry Point & Service Integration
+generated: "2026-03-30T18:00:00Z"
+
+style_anchors:
+  - path: ~/Sites/ai-use-repos/effect/examples/cli-command.ts
+    lines: 1-150
+    description: |
+      Example of @effect/cli command definition with arguments and options.
+      Shows how to define commands, parse arguments, and execute with Effect runtime.
+  - path: ~/Sites/ai-use-repos/EffectPatterns/service-composition.ts
+    lines: 1-120
+    description: |
+      Pattern for composing multiple Effect services using Effect.provide.
+      Shows dependency injection and service orchestration.
+  - path: ~/Sites/ai-use-repos/EffectPatterns/logger-pattern.ts
+    lines: 1-80
+    description: |
+      Pattern for structured logging with Effect Logger.
+      Shows log levels, context, and integration with Effect runtime.
+
+global_constraints:
+  allowed_patterns:
+    - "Use @effect/cli for command definition"
+    - "Use Effect.provide to wire all services"
+    - "Use Effect Logger for all logging"
+    - "Use Effect.gen for orchestration flow"
+    - "Use Layer.provide for dependency injection"
+  forbidden_patterns:
+    - "Direct console.log (use Effect Logger)"
+    - "Manual error handling (use Effect error channel)"
+    - "Hard-coded service instances (use Effect.provide)"
+    - "Process exit without cleanup"
+  tdd_required: true
+  max_task_duration_minutes: 150
+  commit_strategy: "Commit after each task"
+
+quality_gates:
+  - stage: pre-commit
+    commands:
+      - pnpm run typecheck
+      - pnpm run lint
+      - pnpm run test
+  - stage: task-completion
+    criteria:
+      - All tests passing
+      - No type errors
+      - End-to-end flow functional
+      - Graceful shutdown implemented
+
+tasks:
+  - id: m4-001
+    name: Define CLI command structure with @effect/cli
+    description: |
+      Create main CLI command definition using @effect/cli.
+      Define repository argument and future options (config file, polling interval).
+    estimate_minutes: 60
+    type: code
+    dependencies: []
+    files:
+      create:
+        - src/cli/command.ts
+        - tests/cli/command.test.ts
+      modify: []
+      touch_only: []
+    instructions: |
+      **Objective:**
+      Define CLI command structure for review-rock <repository>.
+
+      **Implementation Steps:**
+      1. Create src/cli/command.ts
+      2. Import Command, Args, Options from @effect/cli
+      3. Define reviewRockCommand:
+         - Name: "review-rock"
+         - Description: "Automated PR review using Claude"
+         - Arguments:
+           - repository: Args.text({ name: "repository" }) (e.g., "validkeys/lumen")
+         - Options (for future expansion):
+           - config: Options.file({ name: "config" }).pipe(Options.optional)
+           - pollingInterval: Options.integer({ name: "polling-interval" }).pipe(Options.optional)
+      4. Export command definition (no handler yet)
+
+      **Constraints:**
+      - ONLY use @effect/cli for command definition
+      - Follow pattern in style anchor: ~/Sites/ai-use-repos/effect/examples/cli-command.ts
+      - Keep command definition separate from execution logic
+
+      **TDD Checklist:**
+      - [ ] Write test for command definition (verify args and options)
+      - [ ] Write test for argument parsing
+      - [ ] Verify command compiles correctly
+
+      **Validation:**
+      ```bash
+      pnpm run typecheck
+      pnpm test tests/cli/command.test.ts
+      ```
+      Expected: Command definition tests pass
+
+      **Drift Policy:**
+      If @effect/cli API differs, update to match current version.
+
+    validation:
+      commands:
+        - pnpm run typecheck
+        - pnpm test tests/cli/command.test.ts
+      expected_output: "Tests pass and types check"
+      on_failure: "Review @effect/cli command definition"
+
+  - id: m4-002
+    name: Implement orchestration layer for review workflow
+    description: |
+      Create orchestration service that coordinates polling, claiming,
+      classification, review, and commenting in a single workflow.
+    estimate_minutes: 90
+    type: code
+    dependencies: [m4-001]
+    files:
+      create:
+        - src/orchestration/workflow.ts
+        - tests/orchestration/workflow.test.ts
+      modify: []
+      touch_only:
+        - src/services/github.ts
+        - src/services/classification.ts
+        - src/services/review.ts
+    instructions: |
+      **Objective:**
+      Implement workflow orchestration for the complete review process.
+
+      **Implementation Steps:**
+      1. Create src/orchestration/workflow.ts
+      2. Define processPR workflow using Effect.gen:
+         - Input: repo: string, prNumber: number
+         - Steps:
+           a. Claim PR (GitHubService.claimPR)
+           b. Get PR details and diff (GitHubService.getPRDetails, getPRDiff)
+           c. Classify PR (ClassificationService.classifyPR)
+           d. Select skill name based on classification
+           e. Generate review (ReviewService.generateReview)
+           f. Post review comment (GitHubService.postComment - stub for now)
+         - Return: Effect<ReviewResult, WorkflowError>
+      3. Add claim label release on error:
+         - Wrap workflow in Effect.ensuring or Effect.onError
+         - If workflow fails after claiming (step a), call GitHubService.removeLabel
+         - This allows other instances to retry the PR
+         - Use Effect.catchAll to distinguish claim failure from post-claim failure
+      4. Define WorkflowError union type for all possible failures
+      5. Add unit tests with mocked services including claim release scenarios
+
+      **Constraints:**
+      - Use Effect.gen for sequential orchestration
+      - Use Effect.provide to inject all dependencies
+      - Handle errors at workflow level (don't swallow service errors)
+      - Log each step with Effect Logger
+
+      **TDD Checklist:**
+      - [ ] Write test for successful workflow (all steps succeed)
+      - [ ] Write test for claim failure (PR already claimed) - should not remove label
+      - [ ] Write test for classification failure after claim - should remove label
+      - [ ] Write test for review generation failure after claim - should remove label
+      - [ ] Write test for comment posting failure after claim - should remove label
+      - [ ] Implement processPR workflow to pass tests
+      - [ ] Verify logging occurs at each step
+      - [ ] Verify claim label is released on post-claim errors
+
+      **Validation:**
+      ```bash
+      pnpm test tests/orchestration/workflow.test.ts
+      ```
+      Expected: All workflow tests pass
+
+      **Drift Policy:**
+      If workflow logic becomes complex, STOP and consider refactoring.
+      Keep orchestration layer simple and focused.
+
+    validation:
+      commands:
+        - pnpm test tests/orchestration/workflow.test.ts
+        - pnpm run typecheck
+      expected_output: "Tests pass and types check"
+      on_failure: "Review workflow orchestration logic"
+
+  - id: m4-003
+    name: Implement GitHubService.postComment for review feedback
+    description: |
+      Add postComment method to GitHubService that posts review content
+      as a comment on the GitHub PR using gh CLI.
+    estimate_minutes: 60
+    type: code
+    dependencies: [m4-002]
+    files:
+      create: []
+      modify:
+        - src/services/github.ts
+        - tests/services/github.test.ts
+      touch_only:
+        - src/orchestration/workflow.ts
+        - src/errors/github.ts
+    instructions: |
+      **Objective:**
+      Complete GitHubService with comment posting capability.
+
+      **Implementation Steps:**
+      1. Add removeLabel method to GitHubService:
+         - Accept repo: string, prNumber: number, label: string
+         - Execute: gh pr edit {prNumber} --repo {repo} --remove-label {label}
+         - Handle errors with GitHubCommandError
+         - Used for releasing claim labels on workflow errors
+      2. Add postComment method to GitHubService:
+         - Accept repo: string, prNumber: number, comment: string
+         - Execute: gh pr comment {prNumber} --repo {repo} --body "{comment}"
+         - Handle errors with GitHubCommandError
+         - Use Effect.retry for resilience
+      3. Add unit tests:
+         - Successful label removal
+         - Successful comment posting
+         - Command failures
+         - Large comment (test escaping)
+
+      **Constraints:**
+      - Use gh pr comment command
+      - Escape comment body properly (quotes, special characters)
+      - Follow existing GitHubService patterns
+
+      **TDD Checklist:**
+      - [ ] Write test for successful label removal
+      - [ ] Write test for removeLabel command failure
+      - [ ] Write test for successful comment post
+      - [ ] Write test for postComment command failure
+      - [ ] Write test for special characters in comment
+      - [ ] Implement removeLabel and postComment to pass tests
+      - [ ] Update workflow to use real postComment and removeLabel
+
+      **Validation:**
+      ```bash
+      pnpm test tests/services/github.test.ts -- postComment
+      ```
+      Expected: Comment posting tests pass
+
+      **Drift Policy:**
+      If gh pr comment behavior differs, update implementation.
+
+    validation:
+      commands:
+        - pnpm test tests/services/github.test.ts
+      expected_output: "Comment posting tests pass"
+      on_failure: "Review gh command usage and escaping logic"
+
+  - id: m4-004
+    name: Integrate PollingService with workflow orchestration
+    description: |
+      Update PollingService to use workflow orchestration for each unclaimed PR.
+      Wire polling → workflow execution with proper error handling.
+    estimate_minutes: 75
+    type: code
+    dependencies: [m4-003]
+    files:
+      create: []
+      modify:
+        - src/services/polling.ts
+        - tests/services/polling.test.ts
+      touch_only:
+        - src/orchestration/workflow.ts
+    instructions: |
+      **Objective:**
+      Connect polling loop to workflow execution for complete automation.
+
+      **Implementation Steps:**
+      1. Update PollingService.startPolling:
+         - Find unclaimed PRs (existing logic)
+         - For each unclaimed PR:
+           a. Call processPR workflow
+           b. On success: log review posted
+           c. On failure: log error and continue to next PR
+         - Continue polling with Schedule.spaced
+      2. Update tests to verify workflow integration
+      3. Add error handling: workflow errors should not stop polling
+
+      **Constraints:**
+      - Workflow errors should be logged but not halt polling
+      - Use Effect.catchAll to handle workflow failures gracefully
+      - Continue polling even if individual PR processing fails
+
+      **TDD Checklist:**
+      - [ ] Write test for successful PR processing in poll loop
+      - [ ] Write test for workflow error (should continue polling)
+      - [ ] Write test for multiple PRs in single poll cycle
+      - [ ] Update PollingService to integrate workflow
+      - [ ] Verify error isolation (one failure doesn't stop polling)
+
+      **Validation:**
+      ```bash
+      pnpm test tests/services/polling.test.ts
+      ```
+      Expected: Polling integration tests pass
+
+      **Drift Policy:**
+      If error propagation causes polling to stop, STOP and fix isolation.
+
+    validation:
+      commands:
+        - pnpm test tests/services/polling.test.ts
+        - pnpm run typecheck
+      expected_output: "Tests pass and types check"
+      on_failure: "Review error handling and workflow integration"
+
+  - id: m4-005
+    name: Build main CLI entry point with service wiring
+    description: |
+      Create main.ts entry point that wires all services together,
+      executes CLI command, and starts polling with graceful shutdown.
+    estimate_minutes: 90
+    type: code
+    dependencies: [m4-004]
+    files:
+      create:
+        - src/main.ts
+      modify: []
+      touch_only:
+        - src/cli/command.ts
+        - src/services/polling.ts
+        - src/services/config.ts
+    instructions: |
+      **Objective:**
+      Build complete CLI application with service wiring and execution.
+
+      **Implementation Steps:**
+      1. Create src/main.ts:
+         - Import all service Live implementations
+         - Create MainLayer that provides all services:
+           - ConfigServiceLive
+           - GitHubServiceLive
+           - ClassificationServiceLive
+           - ReviewServiceLive
+           - PollingServiceLive
+         - Define command handler:
+           a. Parse repository argument
+           b. Load config with repository override
+           c. Start polling service
+         - Wire command handler to CLI command
+         - Run with Effect.runPromise and handle interruption (SIGINT/SIGTERM)
+      2. Add graceful shutdown on Ctrl+C
+      3. Add structured logging with log level from environment
+
+      **Constraints:**
+      - Use Layer.provide to wire all services
+      - Follow pattern in style anchor: ~/Sites/ai-use-repos/EffectPatterns/service-composition.ts
+      - Handle SIGINT/SIGTERM for graceful shutdown
+      - Use Effect Logger with configurable log level
+
+      **TDD Checklist:**
+      - [ ] Write test for service layer composition
+      - [ ] Write test for command handler
+      - [ ] Manual test: run CLI with --help (should show usage)
+      - [ ] Manual test: run CLI with repository arg (should start polling)
+
+      **Validation:**
+      ```bash
+      pnpm run typecheck
+      pnpm run build
+      node dist/main.js --help
+      ```
+      Expected: CLI runs and shows help text
+
+      **Drift Policy:**
+      If Layer.provide fails, verify service dependencies are correct.
+      If CLI doesn't start, STOP and debug service wiring.
+
+    validation:
+      commands:
+        - pnpm run typecheck
+        - pnpm run build
+      expected_output: "Build succeeds, main.js created"
+      on_failure: "Review service layer composition and CLI setup"
+
+  - id: m4-006
+    name: Add package.json bin script for global installation
+    description: |
+      Configure package.json to support global installation via pnpm,
+      making review-rock available as a command-line tool.
+    estimate_minutes: 30
+    type: config
+    dependencies: [m4-005]
+    files:
+      create: []
+      modify:
+        - package.json
+      touch_only:
+        - src/main.ts
+    instructions: |
+      **Objective:**
+      Enable global installation of review-rock CLI tool.
+
+      **Implementation Steps:**
+      1. Update package.json:
+         - Add "bin" field: { "review-rock": "./dist/main.js" }
+         - Add shebang to main.ts: #!/usr/bin/env node
+         - Ensure "type": "module" is set
+      2. Test local installation:
+         - pnpm link
+         - review-rock --help (should work globally)
+
+      **Constraints:**
+      - Shebang must be first line of main.ts
+      - Use #!/usr/bin/env node for cross-platform compatibility
+
+      **TDD Checklist:**
+      - N/A (configuration change)
+
+      **Validation:**
+      ```bash
+      pnpm run build
+      pnpm link
+      review-rock --help
+      ```
+      Expected: Command runs globally after linking
+
+      **Drift Policy:**
+      If linking fails, verify package.json bin configuration.
+
+    validation:
+      commands:
+        - pnpm run build
+        - test -f dist/main.js
+      expected_output: "Build succeeds, main.js exists"
+      on_failure: "Review bin configuration in package.json"

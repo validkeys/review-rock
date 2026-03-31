@@ -1,0 +1,404 @@
+milestone: m0
+name: Project Foundation & Configuration
+generated: "2026-03-30T18:00:00Z"
+
+style_anchors:
+  - path: ~/Sites/ai-use-repos/effect/examples/effect-config.ts
+    lines: 1-100
+    description: |
+      Example of Effect Config service usage for typed configuration loading.
+      Shows how to define config schema, validation, and provide defaults.
+  - path: ~/Sites/ai-use-repos/EffectPatterns/config-service-pattern.ts
+    lines: 1-80
+    description: |
+      Pattern for building configuration services with Effect.Config.
+      Demonstrates environment variable loading and validation.
+
+global_constraints:
+  allowed_patterns:
+    - "Use Effect.Config for all configuration loading"
+    - "Use Schema.Struct from @effect/schema for data validation"
+    - "Use pnpm as package manager"
+    - "Use TypeScript strict mode"
+    - "Use Biome for linting and formatting"
+  forbidden_patterns:
+    - "Direct process.env access without validation"
+    - "Type assertions on configuration values"
+    - "Any async/await in service methods (use Effect types)"
+  tdd_required: true
+  max_task_duration_minutes: 150
+  commit_strategy: "Commit after each task"
+
+quality_gates:
+  - stage: pre-commit
+    commands:
+      - pnpm run typecheck
+      - pnpm run lint
+      - pnpm run test
+  - stage: task-completion
+    criteria:
+      - All tests passing
+      - No type errors
+      - No lint errors
+      - Code formatted with Biome
+
+tasks:
+  - id: m0-000
+    name: Validate prerequisites and setup style anchors
+    description: |
+      Validate all required tools and credentials are available before starting development.
+      Clone or verify Effect-TS style anchor repositories for reference during implementation.
+    estimate_minutes: 45
+    type: config
+    dependencies: []
+    files:
+      create:
+        - scripts/validate-prerequisites.sh
+      modify: []
+      touch_only: []
+    instructions: |
+      **Objective:**
+      Ensure development environment is fully prepared before starting implementation.
+
+      **Implementation Steps:**
+      1. Create scripts/validate-prerequisites.sh that checks:
+         - Node.js version >= 18.0.0: node --version
+         - pnpm version >= 8.0.0: pnpm --version
+         - GitHub CLI installed: which gh
+         - GitHub CLI authenticated: gh auth status
+         - claudecode installed: which claudecode (or appropriate command)
+         - AWS credentials configured: aws sts get-caller-identity (optional, warns if not available)
+      2. Check for style anchor repositories:
+         - If ~/Sites/ai-use-repos/effect exists: verify and note
+         - If ~/Sites/ai-use-repos/EffectPatterns exists: verify and note
+         - If missing: provide clone instructions or alternative documentation links
+      3. Script should:
+         - Exit 0 if all critical prerequisites met
+         - Exit 1 if any critical prerequisite missing
+         - Print clear messages for each check (✓ pass, ✗ fail, ⚠ warning)
+      4. Add to package.json scripts: "precheck": "./scripts/validate-prerequisites.sh"
+
+      **Constraints:**
+      - Make script executable: chmod +x
+      - Use clear, actionable error messages
+      - Distinguish between critical (Node, pnpm, gh) and optional (AWS, style anchors)
+
+      **TDD Checklist:**
+      - N/A (validation script)
+
+      **Validation:**
+      ```bash
+      chmod +x scripts/validate-prerequisites.sh
+      ./scripts/validate-prerequisites.sh
+      ```
+      Expected: Script runs and reports status of all prerequisites
+
+      **Drift Policy:**
+      If any prerequisite is missing, provide clear installation instructions.
+      Do not proceed with development until critical prerequisites are met.
+
+    validation:
+      commands:
+        - test -f scripts/validate-prerequisites.sh
+        - test -x scripts/validate-prerequisites.sh
+      expected_output: "Script exists and is executable"
+      on_failure: "Create prerequisite validation script"
+
+  - id: m0-001
+    name: Initialize project structure and package.json
+    description: |
+      Create initial project structure with src/, tests/, and configuration files.
+      Initialize package.json with Effect-TS dependencies and development scripts.
+    estimate_minutes: 45
+    type: config
+    dependencies: [m0-000]
+    files:
+      create:
+        - package.json
+        - tsconfig.json
+        - biome.json
+        - src/index.ts
+        - tests/.gitkeep
+      modify: []
+      touch_only: []
+    instructions: |
+      **Objective:**
+      Initialize the Review Rock project with TypeScript, Effect-TS, and Biome tooling.
+
+      **Implementation Steps:**
+      1. Create package.json with:
+         - name: "review-rock"
+         - version: "0.1.0"
+         - type: "module"
+         - dependencies: effect, @effect/platform, @effect/cli, @effect/schema
+         - devDependencies: typescript, @biomejs/biome, vitest, @effect/vitest
+      2. Add scripts:
+         - "dev": "tsx src/main.ts"
+         - "build": "tsc"
+         - "test": "vitest"
+         - "typecheck": "tsc --noEmit"
+         - "lint": "biome check ."
+         - "format": "biome format --write ."
+      3. Create tsconfig.json with strict mode enabled, target ES2022, module NodeNext
+      4. Create biome.json with recommended rules
+      5. Create placeholder src/index.ts with empty export
+      6. Run pnpm install
+
+      **Constraints:**
+      - ONLY use pnpm as package manager
+      - TypeScript must use strict mode
+      - Follow Effect-TS dependency versions from style anchors
+
+      **TDD Checklist:**
+      - N/A (configuration setup)
+
+      **Validation:**
+      ```bash
+      pnpm install
+      pnpm run typecheck
+      pnpm run lint
+      ```
+      Expected: No errors, dependencies installed successfully
+
+      **Drift Policy:**
+      If package installation fails, STOP and verify network connectivity.
+      Do not proceed with broken dependencies.
+
+    validation:
+      commands:
+        - pnpm install
+        - pnpm run typecheck
+        - pnpm run lint
+      expected_output: "All commands succeed with exit code 0"
+      on_failure: "Verify pnpm installation and network access to npm registry"
+
+  - id: m0-002
+    name: Create configuration schema with Effect Schema
+    description: |
+      Define configuration schema using @effect/schema for repository name,
+      polling interval, path patterns, and skill mappings.
+    estimate_minutes: 60
+    type: code
+    dependencies: [m0-001]
+    files:
+      create:
+        - src/config/schema.ts
+        - tests/config/schema.test.ts
+      modify: []
+      touch_only: []
+    instructions: |
+      **Objective:**
+      Define typed configuration schema for Review Rock settings.
+
+      **Implementation Steps:**
+      1. Create src/config/schema.ts
+      2. Define ConfigSchema using Schema.Struct with fields:
+         - repository: Schema.String (e.g., "validkeys/lumen")
+         - pollingIntervalMinutes: Schema.Number (default: 5)
+         - claimLabel: Schema.String (default: "review-rock-claimed")
+         - frontendPaths: Schema.Array(Schema.String) (default: ["apps/react-webapp", "lib/core-ui-system"])
+         - skills: Schema.Struct with frontend, backend, mixed skill names
+      3. Export ConfigSchema and type Config = Schema.Schema.Type<typeof ConfigSchema>
+      4. Add validation for pollingIntervalMinutes > 0
+
+      **Constraints:**
+      - ONLY use Schema.Struct from @effect/schema
+      - NO type assertions on schema values
+      - Follow pattern in style anchor ~/Sites/ai-use-repos/effect/examples/effect-config.ts
+
+      **TDD Checklist:**
+      - [ ] Write test for valid configuration schema
+      - [ ] Write test for invalid pollingIntervalMinutes (should fail validation)
+      - [ ] Write test for missing required fields
+      - [ ] Implement schema to pass all tests
+
+      **Validation:**
+      ```bash
+      pnpm test tests/config/schema.test.ts
+      ```
+      Expected: All tests passing
+
+      **Drift Policy:**
+      If Schema import fails, verify @effect/schema is installed.
+      Do not use alternative validation libraries.
+
+    validation:
+      commands:
+        - pnpm test tests/config/schema.test.ts
+      expected_output: "All tests pass"
+      on_failure: "Review schema validation logic and test expectations"
+
+  - id: m0-003
+    name: Implement ConfigService with Effect.Config
+    description: |
+      Build ConfigService that loads configuration from environment variables
+      and config file, validates against schema, and provides typed config.
+    estimate_minutes: 90
+    type: code
+    dependencies: [m0-002]
+    files:
+      create:
+        - src/services/config.ts
+        - tests/services/config.test.ts
+      modify: []
+      touch_only:
+        - src/config/schema.ts
+    instructions: |
+      **Objective:**
+      Implement Effect service for loading and validating configuration.
+
+      **Implementation Steps:**
+      1. Create src/services/config.ts
+      2. Define ConfigService interface with:
+         - getConfig: Effect.Effect<Config, ConfigError>
+      3. Implement ConfigServiceLive using Effect.Service and Effect.Config
+      4. Configuration loading strategy:
+         a. Try loading review-rock.config.ts from current working directory
+         b. If file not found or has errors, fall back to environment variables
+         c. Merge with defaults from ConfigSchema (lowest precedence)
+         d. Precedence order: config file > env vars (REVIEW_ROCK_*) > defaults
+      5. Load environment variables with REVIEW_ROCK_ prefix:
+         - REVIEW_ROCK_REPOSITORY
+         - REVIEW_ROCK_POLLING_INTERVAL_MINUTES
+         - REVIEW_ROCK_CLAIM_LABEL
+      6. Validate final config against ConfigSchema
+      7. Return typed Config on success, ConfigError on validation failure
+
+      **Constraints:**
+      - ONLY use Effect.Config for environment variable loading
+      - ONLY use Effect.Service for service definition
+      - Follow pattern in style anchor ~/Sites/ai-use-repos/EffectPatterns/config-service-pattern.ts
+      - NO direct process.env access
+
+      **TDD Checklist:**
+      - [ ] Write test for loading config from file (if exists)
+      - [ ] Write test for loading valid config from environment (file not found)
+      - [ ] Write test for invalid config (should return ConfigError)
+      - [ ] Write test for missing config (should use defaults)
+      - [ ] Write test for precedence: file > env > defaults
+      - [ ] Implement ConfigService to pass all tests
+      - [ ] Refactor if needed
+
+      **Validation:**
+      ```bash
+      pnpm test tests/services/config.test.ts
+      ```
+      Expected: All tests passing, config loads and validates correctly
+
+      **Drift Policy:**
+      If Effect.Config is not available, STOP and verify Effect version.
+      Do not implement custom environment loading.
+
+    validation:
+      commands:
+        - pnpm test tests/services/config.test.ts
+        - pnpm run typecheck
+      expected_output: "Tests pass and types check"
+      on_failure: "Review Effect.Config usage and service definition"
+
+  - id: m0-004
+    name: Create example configuration file
+    description: |
+      Create review-rock.config.example.ts with documented configuration options
+      showing all available settings and defaults.
+    estimate_minutes: 30
+    type: docs
+    dependencies: [m0-003]
+    files:
+      create:
+        - review-rock.config.example.ts
+      modify: []
+      touch_only:
+        - src/config/schema.ts
+    instructions: |
+      **Objective:**
+      Provide example configuration file for users to customize.
+
+      **Implementation Steps:**
+      1. Create review-rock.config.example.ts in project root
+      2. Import Config type from src/config/schema
+      3. Export example config object with:
+         - repository: "validkeys/lumen" (example)
+         - pollingIntervalMinutes: 5
+         - claimLabel: "review-rock-claimed"
+         - frontendPaths: ["apps/react-webapp", "lib/core-ui-system"]
+         - skills: { frontend: "vercel-react-best-practices", backend: "typescript-expert", mixed: "vercel-react-best-practices,typescript-expert" }
+      4. Add JSDoc comments explaining each field
+      5. Add note about copying to review-rock.config.ts for local use
+
+      **Constraints:**
+      - ONLY use types from src/config/schema.ts
+      - Include helpful comments for each configuration option
+
+      **TDD Checklist:**
+      - N/A (documentation file)
+
+      **Validation:**
+      ```bash
+      pnpm run typecheck
+      ```
+      Expected: Example config file type checks successfully
+
+      **Drift Policy:**
+      If types don't match ConfigSchema, update example to match schema.
+
+    validation:
+      commands:
+        - pnpm run typecheck
+      expected_output: "No type errors"
+      on_failure: "Ensure example config matches ConfigSchema type"
+
+  - id: m0-005
+    name: Add project documentation files
+    description: |
+      Create initial README.md stub, LICENSE, and .gitignore.
+    estimate_minutes: 30
+    type: docs
+    dependencies: [m0-004]
+    files:
+      create:
+        - README.md
+        - LICENSE
+        - .gitignore
+      modify: []
+      touch_only: []
+    instructions: |
+      **Objective:**
+      Add essential project documentation and ignore patterns.
+
+      **Implementation Steps:**
+      1. Create README.md with:
+         - Project title "Review Rock"
+         - Brief description (automated PR reviews with Claude)
+         - Placeholder for installation and usage (to be filled in m6)
+      2. Create LICENSE (MIT or project-appropriate license)
+      3. Create .gitignore with:
+         - node_modules/
+         - dist/
+         - .DS_Store
+         - *.log
+         - review-rock.config.ts (user-specific config)
+         - .env
+
+      **Constraints:**
+      - Keep README.md minimal for now (full docs come in m6)
+
+      **TDD Checklist:**
+      - N/A (documentation)
+
+      **Validation:**
+      ```bash
+      cat README.md LICENSE .gitignore
+      ```
+      Expected: Files exist with appropriate content
+
+      **Drift Policy:**
+      N/A
+
+    validation:
+      commands:
+        - test -f README.md
+        - test -f LICENSE
+        - test -f .gitignore
+      expected_output: "All files exist"
+      on_failure: "Create missing files"

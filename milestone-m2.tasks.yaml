@@ -1,0 +1,274 @@
+milestone: m2
+name: PR Classification Service
+generated: "2026-03-30T18:00:00Z"
+
+style_anchors:
+  - path: ~/Sites/ai-use-repos/EffectPatterns/service-pattern.ts
+    lines: 1-100
+    description: |
+      Effect.Service definition pattern with Effect.provide for dependency injection.
+      Shows how to create service interfaces and live implementations.
+  - path: ~/Sites/ai-use-repos/effect/examples/data-validation.ts
+    lines: 1-80
+    description: |
+      Example of using Effect and data transformation pipelines.
+      Shows functional composition and type-safe data processing.
+
+global_constraints:
+  allowed_patterns:
+    - "Use Effect.Service for service definition"
+    - "Use functional composition with pipe for data transformations"
+    - "Use Schema validation for input types"
+    - "Use Array.some and Array.every for path matching"
+  forbidden_patterns:
+    - "Mutable state or let variables for accumulation"
+    - "Imperative loops (use Array methods)"
+    - "Untyped classification logic"
+  tdd_required: true
+  max_task_duration_minutes: 150
+  commit_strategy: "Commit after each task"
+
+quality_gates:
+  - stage: pre-commit
+    commands:
+      - pnpm run typecheck
+      - pnpm run lint
+      - pnpm run test
+  - stage: task-completion
+    criteria:
+      - All tests passing
+      - No type errors
+      - No lint errors
+      - Classification logic covers all scenarios
+
+tasks:
+  - id: m2-001
+    name: Define ClassificationService interface and types
+    description: |
+      Create ClassificationService interface with classifyPR method.
+      Define PRType enum (frontend, backend, mixed) and classification result type.
+    estimate_minutes: 30
+    type: code
+    dependencies: []
+    files:
+      create:
+        - src/services/classification.ts
+        - src/types/pr-classification.ts
+        - tests/services/classification.test.ts
+      modify: []
+      touch_only: []
+    instructions: |
+      **Objective:**
+      Define ClassificationService interface and PR classification types.
+
+      **Implementation Steps:**
+      1. Create src/types/pr-classification.ts with:
+         - PRType enum: "frontend" | "backend" | "mixed"
+         - ClassificationResult type: { type: PRType, matchedPaths: string[] }
+      2. Create src/services/classification.ts with interface:
+         - classifyPR(changedFiles: string[]): Effect<ClassificationResult, never>
+      3. Define service interface (no implementation yet)
+      4. Add test stub
+
+      **Constraints:**
+      - Use union type for PRType (not string enum)
+      - Follow Effect.Service pattern
+
+      **TDD Checklist:**
+      - [ ] Write test stub (implementation in next task)
+      - [ ] Verify types compile correctly
+
+      **Validation:**
+      ```bash
+      pnpm run typecheck
+      ```
+      Expected: Interface and types compile successfully
+
+      **Drift Policy:**
+      N/A
+
+    validation:
+      commands:
+        - pnpm run typecheck
+      expected_output: "No type errors"
+      on_failure: "Review type definitions"
+
+  - id: m2-002
+    name: Implement path matching logic for frontend files
+    description: |
+      Implement helper function to check if a file path matches frontend patterns.
+      Frontend paths: apps/react-webapp, lib/core-ui-system.
+    estimate_minutes: 60
+    type: code
+    dependencies: [m2-001]
+    files:
+      create: []
+      modify:
+        - src/services/classification.ts
+        - tests/services/classification.test.ts
+      touch_only:
+        - src/types/pr-classification.ts
+        - src/services/config.ts
+    instructions: |
+      **Objective:**
+      Implement path matching logic for identifying frontend files.
+
+      **Implementation Steps:**
+      1. Add private helper function isFrontendPath:
+         - Accept filePath: string and frontendPatterns: string[]
+         - Use Array.some to check if filePath starts with any pattern
+         - Return boolean
+      2. Add unit tests:
+         - apps/react-webapp/src/App.tsx → true
+         - lib/core-ui-system/Button.tsx → true
+         - src/services/api.ts → false
+         - apps/api/routes.ts → false
+
+      **Constraints:**
+      - Use Array.some for pattern matching
+      - Make patterns configurable (load from ConfigService later)
+      - NO regex for MVP (simple string prefix matching)
+
+      **TDD Checklist:**
+      - [ ] Write test for apps/react-webapp path (should be frontend)
+      - [ ] Write test for lib/core-ui-system path (should be frontend)
+      - [ ] Write test for backend path (should not be frontend)
+      - [ ] Implement isFrontendPath to pass tests
+      - [ ] Verify with edge cases (empty path, nested paths)
+
+      **Validation:**
+      ```bash
+      pnpm test tests/services/classification.test.ts -- isFrontendPath
+      ```
+      Expected: All path matching tests pass
+
+      **Drift Policy:**
+      If pattern matching is insufficient, document limitations.
+      Do not add regex complexity in MVP.
+
+    validation:
+      commands:
+        - pnpm test tests/services/classification.test.ts
+      expected_output: "Path matching tests pass"
+      on_failure: "Review string prefix matching logic"
+
+  - id: m2-003
+    name: Implement ClassificationService.classifyPR
+    description: |
+      Implement complete PR classification: frontend, backend, or mixed
+      based on changed file paths.
+    estimate_minutes: 75
+    type: code
+    dependencies: [m2-002]
+    files:
+      create: []
+      modify:
+        - src/services/classification.ts
+        - tests/services/classification.test.ts
+      touch_only:
+        - src/services/config.ts
+    instructions: |
+      **Objective:**
+      Implement full PR classification logic with all three types.
+
+      **Implementation Steps:**
+      1. Implement ClassificationServiceLive:
+         - Depend on ConfigService to get frontendPaths config
+         - In classifyPR(changedFiles):
+           a. Separate files into frontend and backend arrays using isFrontendPath
+           b. If only frontend files → return { type: "frontend", matchedPaths: frontendFiles }
+           c. If only backend files → return { type: "backend", matchedPaths: backendFiles }
+           d. If both → return { type: "mixed", matchedPaths: [...frontendFiles, ...backendFiles] }
+      2. Add comprehensive unit tests:
+         - Frontend-only PR
+         - Backend-only PR
+         - Mixed PR
+         - Empty file list (edge case)
+
+      **Constraints:**
+      - Use functional composition (pipe, Array.filter, Array.partition)
+      - NO mutable state (let variables)
+      - Use Effect.provide to inject ConfigService in tests
+
+      **TDD Checklist:**
+      - [ ] Write test for frontend-only PR
+      - [ ] Write test for backend-only PR
+      - [ ] Write test for mixed PR
+      - [ ] Write test for empty PR (no files changed)
+      - [ ] Implement classifyPR to pass all tests
+      - [ ] Refactor for clarity
+
+      **Validation:**
+      ```bash
+      pnpm test tests/services/classification.test.ts
+      ```
+      Expected: All classification tests pass
+
+      **Drift Policy:**
+      If classification logic is ambiguous, STOP and clarify requirements.
+      Document any edge cases discovered during testing.
+
+    validation:
+      commands:
+        - pnpm test tests/services/classification.test.ts
+        - pnpm run typecheck
+      expected_output: "All tests pass and types check"
+      on_failure: "Review classification logic and test coverage"
+
+  - id: m2-004
+    name: Add integration test for ClassificationService with real config
+    description: |
+      Create integration test that loads real configuration and tests
+      classification against validkeys/lumen path structure.
+    estimate_minutes: 45
+    type: test
+    dependencies: [m2-003]
+    files:
+      create:
+        - tests/integration/classification.integration.test.ts
+      modify: []
+      touch_only:
+        - src/services/classification.ts
+        - src/services/config.ts
+    instructions: |
+      **Objective:**
+      Verify ClassificationService works correctly with real configuration.
+
+      **Implementation Steps:**
+      1. Create integration test file
+      2. Load ConfigService with real config (apps/react-webapp, lib/core-ui-system)
+      3. Test realistic file path scenarios from validkeys/lumen:
+         - apps/react-webapp/src/App.tsx → frontend
+         - lib/core-ui-system/components/Button.tsx → frontend
+         - apps/api/src/routes/user.ts → backend
+         - package.json → backend
+         - Mixed: both webapp and api files → mixed
+      4. Use Effect.provide to wire services together
+
+      **Constraints:**
+      - Use real ConfigService (not mocked)
+      - Test against actual validkeys/lumen path structure
+      - Follow Effect.provide pattern for service composition
+
+      **TDD Checklist:**
+      - [ ] Write integration test with real config
+      - [ ] Verify frontend path detection
+      - [ ] Verify backend path detection
+      - [ ] Verify mixed PR detection
+      - [ ] Run test to validate
+
+      **Validation:**
+      ```bash
+      pnpm test tests/integration/classification.integration.test.ts
+      ```
+      Expected: Integration tests pass with real config
+
+      **Drift Policy:**
+      If real config behavior differs from unit tests, update unit tests.
+      Configuration should be the source of truth.
+
+    validation:
+      commands:
+        - pnpm test tests/integration/classification.integration.test.ts
+      expected_output: "Integration tests pass"
+      on_failure: "Review config loading and service wiring"

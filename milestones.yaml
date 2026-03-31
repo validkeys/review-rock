@@ -1,0 +1,132 @@
+version: "1.0.0"
+project: Review Rock
+generated: "2026-03-30T18:00:00Z"
+
+business_requirements: ./business-requirements.yaml
+technical_requirements: ./technical-requirements.yaml
+
+meta:
+  ordering_strategy: foundation-first
+  ordering_rationale: "Greenfield build with clear requirements - establish infrastructure and tooling first, then build features sequentially"
+
+milestones:
+  - id: m0
+    name: Project Foundation & Configuration
+    description: |
+      Validate prerequisites and initialize the project with TypeScript, Effect-TS,
+      and Biome tooling. Set up package structure, configuration loading via Effect Config,
+      and establish development environment.
+    dependencies: []
+    estimated_duration: 1-2 days
+    tasks_file: milestone-m0.tasks.yaml
+    success_criteria:
+      - All prerequisites validated (Node, pnpm, gh, claudecode)
+      - Style anchor repositories accessible or documented
+      - package.json with all Effect-TS dependencies installed
+      - TypeScript strict mode compiles successfully
+      - Biome linting and formatting runs without errors
+      - ConfigService loads and validates configuration with clear precedence
+      - Development scripts (dev, build, test) functional
+
+  - id: m1
+    name: GitHub Integration Service
+    description: |
+      Implement GitHubService that wraps GitHub CLI (gh) for all GitHub operations.
+      Support PR fetching, label claiming (atomic), label removal, PR details, and diff retrieval.
+      Implement PollingService with Effect.repeat and Schedule.spaced for 5-minute intervals.
+    dependencies: [m0]
+    estimated_duration: 2-3 days
+    tasks_file: milestone-m1.tasks.yaml
+    success_criteria:
+      - GitHubService shells out to gh CLI successfully
+      - Atomic label claiming prevents duplicate reviews
+      - Label removal supports claim release on errors
+      - PollingService uses Effect.repeat with 5-minute intervals
+      - All GitHub operations have proper error handling and retries
+      - Unit tests pass with mocked gh CLI responses
+
+  - id: m2
+    name: PR Classification Service
+    description: |
+      Implement ClassificationService that analyzes changed file paths to classify
+      PRs as frontend, backend, or mixed. Frontend paths: apps/react-webapp,
+      lib/core-ui-system. All other paths are backend.
+    dependencies: [m1]
+    estimated_duration: 1 day
+    tasks_file: milestone-m2.tasks.yaml
+    success_criteria:
+      - ClassificationService correctly identifies frontend files
+      - ClassificationService correctly identifies backend files
+      - Mixed PRs (both frontend and backend) classified correctly
+      - Path patterns configurable via Config
+      - Unit tests cover all classification scenarios
+
+  - id: m3
+    name: Review Service & Claude Integration
+    description: |
+      Implement ReviewService that shells out to claudecode CLI with skill name
+      and PR context. Handle AWS SSO token expiry detection, skill not found errors,
+      and capture review output for posting to GitHub.
+    dependencies: [m2]
+    estimated_duration: 2-3 days
+    tasks_file: milestone-m3.tasks.yaml
+    success_criteria:
+      - ReviewService spawns claudecode subprocess successfully
+      - AWS SSO token expiry detected with helpful error message
+      - Skill not found errors detected with helpful guidance
+      - Review output captured and parsed correctly
+      - Retry logic with exponential backoff for transient failures
+      - Unit tests with mocked claudecode subprocess
+
+  - id: m4
+    name: CLI Entry Point & Service Integration
+    description: |
+      Build main CLI using @effect/cli with command definition for review-rock <repository>.
+      Wire all services together: polling → claiming → classification → review → comment.
+      Implement end-to-end orchestration with Effect.provide for dependency injection.
+      Ensure claim labels are released on workflow errors for retry coordination.
+    dependencies: [m3]
+    estimated_duration: 2 days
+    tasks_file: milestone-m4.tasks.yaml
+    success_criteria:
+      - CLI accepts repository argument (e.g., validkeys/lumen)
+      - All services wired together via Effect.provide
+      - End-to-end flow: poll → claim → classify → review → comment
+      - Claim labels released on workflow errors (enables retry)
+      - Graceful shutdown on SIGINT/SIGTERM
+      - Structured logging throughout entire flow
+      - Manual smoke test completes successfully
+
+  - id: m5
+    name: Testing & Error Handling
+    description: |
+      Comprehensive test suite with unit tests for all services, integration tests
+      for gh and claudecode CLI interactions, and error scenario testing (token expiry,
+      rate limits, network failures). Achieve 80% code coverage target.
+    dependencies: [m4]
+    estimated_duration: 2-3 days
+    tasks_file: milestone-m5.tasks.yaml
+    success_criteria:
+      - Unit test coverage ≥80%
+      - Integration tests for gh CLI operations pass
+      - Integration tests for claudecode CLI pass
+      - Error scenarios tested (token expiry, skill not found, rate limits)
+      - Concurrent instance coordination tested (label claiming)
+      - All quality gates passing (lint, typecheck, tests)
+
+  - id: m6
+    name: Documentation & Release Preparation
+    description: |
+      Write comprehensive README with installation, setup, and usage instructions.
+      Create example configuration file. Prepare package for npm publishing.
+      Add usage documentation and troubleshooting guide.
+    dependencies: [m5]
+    estimated_duration: 1-2 days
+    tasks_file: milestone-m6.tasks.yaml
+    success_criteria:
+      - README.md with complete setup and usage instructions
+      - review-rock.config.example.ts with documented configuration
+      - Package prepared for npm publishing (name, version, bin script)
+      - Troubleshooting guide for common issues
+      - CHANGELOG.md documenting initial release
+      - Project ready for manual pnpm publish

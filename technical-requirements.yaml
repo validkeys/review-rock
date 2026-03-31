@@ -1,0 +1,331 @@
+project: Review Rock
+version: "1.0.0"
+generated: "2026-03-30T17:35:00Z"
+business_requirements_ref: ./business-requirements.yaml
+
+architecture:
+  pattern: Effect-TS service architecture
+  description: |
+    Functional service composition using Effect-TS runtime with strong type safety,
+    built-in error handling, and retry logic. Services are composed through dependency
+    injection using Effect.provide(), enabling excellent testability and distributed
+    system resilience.
+  components:
+    - name: PollingService
+      responsibility: Poll GitHub every 5 minutes for unclaimed PRs using Effect.repeat with Schedule.spaced
+    - name: GitHubService
+      responsibility: Wrap GitHub CLI (gh) commands, handle PR claiming via labels, fetch PR details and diffs
+    - name: ClassificationService
+      responsibility: Classify PRs as frontend/backend/mixed based on path patterns (apps/react-webapp, lib/core-ui-system = frontend)
+    - name: ReviewService
+      responsibility: Shell out to claudecode CLI with skill name and PR context, capture review output
+    - name: ConfigService
+      responsibility: Load and validate configuration using Effect Config service
+
+technology_stack:
+  language: TypeScript
+  runtime: Node.js
+  frameworks:
+    - Effect-TS (core runtime and services)
+    - "@effect/cli" (CLI command definitions)
+  libraries:
+    core:
+      - effect (core Effect-TS library)
+      - "@effect/platform" (process spawning, logging)
+    development:
+      - vitest (test runner)
+      - "@biomejs/biome" (linting and formatting)
+  package_manager: pnpm
+
+project_structure:
+  type: single-repo
+  layout: |
+    review-rock/
+    ├── src/
+    │   ├── services/
+    │   │   ├── github.ts        # GitHub CLI wrapper
+    │   │   ├── classification.ts # Path-based PR classification
+    │   │   ├── review.ts         # Claude invocation via claudecode
+    │   │   ├── polling.ts        # Main polling loop with Effect.repeat
+    │   │   └── config.ts         # Configuration loading
+    │   ├── main.ts               # CLI entry point with @effect/cli
+    │   └── index.ts              # Exports
+    ├── tests/
+    │   └── services/             # Service tests with Effect test layers
+    ├── review-rock.config.ts     # Default configuration template
+    ├── package.json
+    ├── tsconfig.json
+    └── biome.json
+  key_directories:
+    - path: src/services/
+      purpose: Effect services for GitHub, classification, review, polling, config
+    - path: tests/services/
+      purpose: Service unit tests using Effect.provide() for dependency injection
+
+data_model:
+  strategy: in-memory only
+  database: none
+  schema_approach: |
+    No persistent storage required. GitHub is the source of truth for PR state.
+    Claim labels on PRs provide distributed coordination. All state lives in-memory
+    during polling loop execution.
+  migrations: none
+
+api:
+  style: CLI
+  framework: "@effect/cli"
+  versioning: none (single command for MVP)
+  documentation: |
+    Type-safe command definition using @effect/cli:
+
+    Command: review-rock <repository>
+    Example: review-rock validkeys/lumen
+
+    Options (future):
+    --polling-interval: Override default 5-minute polling interval
+    --config: Path to custom configuration file
+
+security:
+  authentication:
+    github:
+      method: GitHub CLI (gh)
+      implementation: Leverages existing gh authentication, no credential storage in Review Rock
+    claude:
+      method: claudecode CLI authentication
+      implementation: Users already have claudecode installed and authenticated, no separate auth needed
+  authorization:
+    model: none (relies on GitHub and claudecode permissions)
+    implementation: User must have GitHub access to target repository and valid claudecode auth
+  secrets:
+    storage: none required
+    rotation: handled by gh and claudecode
+  data_validation:
+    input: Effect Schema validation for configuration and GitHub API responses
+    output: Parse and validate claudecode CLI output
+
+testing:
+  strategy: Test-driven development with Effect test layers
+  types:
+    unit:
+      framework: Vitest
+      coverage_target: 80%
+      approach: |
+        Use Effect.provide() to inject test implementations of services.
+        Mock GitHubService for classification tests.
+        Mock ClassificationService and ReviewService for polling tests.
+    integration:
+      framework: Vitest
+      approach: |
+        Test actual gh CLI integration (requires gh auth in CI/test env).
+        Test actual claudecode CLI integration (requires claudecode setup).
+    e2e:
+      framework: manual
+      approach: |
+        Manual testing against real GitHub repositories and claudecode.
+        Verify end-to-end polling → claiming → classification → review → comment flow.
+  mocking:
+    strategy: Mock external commands (gh, claudecode) for unit tests
+    tools: Effect test layers, Vitest mocks
+
+development:
+  workflow: |
+    1. Clone repository
+    2. Run pnpm install
+    3. Configure review-rock.config.ts
+    4. Run pnpm dev for development
+    5. Run pnpm test for tests
+    6. Run pnpm build for production build
+  code_quality:
+    linter: Biome
+    formatter: Biome
+    type_checker: TypeScript (strict mode)
+  pre_commit_hooks: none for MVP
+
+ci_cd:
+  platform: none (manual for MVP)
+  pipeline: |
+    MVP prioritizes core functionality over CI/CD pipeline.
+    Post-MVP can add GitHub Actions for:
+    - Type checking on PRs
+    - Run test suite
+    - Publish to npm on release tags
+
+deployment:
+  target: local developer machines
+  packaging:
+    format: npm package
+    distribution: |
+      Publish to npm as @review-rock/cli (or similar).
+      Users install globally: pnpm install -g review-rock
+      Binary available as: review-rock
+  environments:
+    - name: local development
+      config: Use local review-rock.config.ts, local gh and claudecode auth
+    - name: production (developer machines)
+      config: Same as local - runs on individual developer machines
+  release_process:
+    strategy: semver
+    automation: manual for MVP (pnpm publish)
+
+monitoring:
+  logging:
+    format: structured JSON
+    destination: console (stdout/stderr)
+    implementation: Effect Logger service with log levels (debug, info, warn, error)
+  metrics:
+    collection: none for MVP
+    visualization: none
+  alerts:
+    strategy: none for MVP
+    channels: none
+
+performance:
+  targets:
+    response_time: Complete review within 5-10 minutes of PR creation
+    throughput: Handle multiple concurrent running instances without conflicts
+  optimization:
+    strategy: |
+      - GitHub label operations are atomic (prevent race conditions)
+      - claudecode subprocess spawning is efficient
+      - Minimal in-memory state reduces overhead
+    monitoring: Log timing for each step (poll, claim, classify, review, comment)
+
+scalability:
+  approach: horizontal (multiple instances on different machines)
+  limits:
+    concurrent_users: 10-20 instances per repository (GitHub API rate limits)
+    data_volume: unlimited (no persistent storage)
+  bottlenecks:
+    - GitHub API rate limits (authenticated gh CLI provides higher limits)
+    - Claude API rate limits via claudecode (handled by exponential backoff)
+    - AWS SSO token expiry after 1 hour (require user re-authentication)
+
+constraints:
+  technical:
+    - Must use GitHub CLI (gh) for all GitHub operations
+    - Must use claudecode CLI for Claude invocation
+    - Must run on developer machines (no server deployment)
+    - Must work with validkeys/lumen repository structure
+    - Requires Node.js runtime and pnpm package manager
+    - Requires gh CLI installed and authenticated
+    - Requires claudecode CLI installed and authenticated
+  operational:
+    - No additional external services or databases
+    - No persistent storage (GitHub is source of truth)
+    - MVP timeline of 2-4 weeks limits feature scope
+  resources:
+    - Developer must have valid AWS SSO credentials for claudecode
+    - Developer must have GitHub access to target repository
+
+trade_offs:
+  - decision: Shell out to claudecode CLI instead of direct Bedrock API
+    rationale: |
+      Users already have claudecode installed and authenticated. Shelling out
+      leverages existing skill system and removes need for parallel Bedrock integration.
+    alternative: Direct AWS Bedrock API calls via Vercel AI SDK
+    consequence: |
+      Slightly higher latency from process spawning, but significantly simpler
+      implementation and better integration with existing developer workflows.
+    reversibility: medium (would need to implement Bedrock client and skill loading)
+
+  - decision: In-memory state only, no persistent storage
+    rationale: GitHub labels provide distributed state, no need for external locking service
+    alternative: SQLite or file-based storage for tracking review history
+    consequence: |
+      Simpler architecture, no database dependency, but no historical metrics.
+      If metrics are needed post-MVP, can add file-based logging.
+    reversibility: high (easy to add file-based storage later)
+
+  - decision: Path-based PR classification instead of ML classifier
+    rationale: Simple, configurable, deterministic, sufficient for MVP
+    alternative: Machine learning model for intelligent classification
+    consequence: Works well for known path patterns, may need updates for new project structures
+    reversibility: high (can add ML classifier as enhancement)
+
+  - decision: No CI/CD for MVP
+    rationale: Prioritize core functionality, manual testing is sufficient for initial release
+    alternative: GitHub Actions pipeline for testing and publishing
+    consequence: Manual testing overhead, slower release cycle
+    reversibility: high (can add GitHub Actions post-MVP)
+
+  - decision: Effect Schedule for polling instead of cron
+    rationale: Built-in retry logic, graceful interruption, better error handling
+    alternative: Cron job or setInterval loop
+    consequence: Slightly more complex setup, but much better resilience
+    reversibility: low (core to architecture choice)
+
+style_anchors:
+  effect_ts:
+    - path: ~/Sites/ai-use-repos/effect
+      purpose: Official Effect-TS examples and patterns
+    - path: ~/Sites/ai-use-repos/EffectPatterns
+      purpose: Community Effect patterns and best practices
+  description: |
+    All implementation must follow Effect-TS patterns from the specified repositories.
+    Use functional service composition, Effect.provide() for dependency injection,
+    Effect.retry with Schedule for resilience, and typed errors.
+
+open_questions: []
+
+dependencies:
+  external:
+    required:
+      - name: gh (GitHub CLI)
+        purpose: GitHub API operations
+        installation: https://cli.github.com/
+        authentication: gh auth login
+      - name: claudecode
+        purpose: Claude API invocation with skill support
+        installation: npm install -g @anthropic-ai/claude-code (or similar)
+        authentication: Must be pre-authenticated by user
+      - name: Node.js
+        version: ">=18.0.0"
+        purpose: JavaScript runtime
+      - name: pnpm
+        version: ">=8.0.0"
+        purpose: Package manager
+    optional: []
+
+  internal:
+    - name: Frontend review skill
+      description: claudecode skill for reviewing React/frontend code
+      location: Registered with claudecode CLI
+      required: yes
+    - name: Backend review skill
+      description: claudecode skill for reviewing backend code
+      location: Registered with claudecode CLI
+      required: yes
+
+special_considerations:
+  aws_sso_token_expiry:
+    description: |
+      AWS SSO tokens expire after 1 hour. This will cause claudecode authentication
+      to fail mid-operation. Review Rock must detect credential expiry errors and
+      provide clear guidance to re-authenticate.
+    implementation: |
+      Catch credential error from claudecode subprocess, detect token expiry pattern,
+      log helpful message: "AWS SSO token expired. Run 'aws sso login' to refresh."
+    testing: |
+      Test with expired SSO credentials to verify error detection and user messaging.
+
+  github_label_atomicity:
+    description: |
+      GitHub label operations are atomic at the API level. When multiple instances
+      attempt to add the same label simultaneously, only one succeeds. This is the
+      core mechanism for distributed coordination without external locking.
+    implementation: |
+      Use gh CLI label add command, check return code. If label add fails, assume
+      another instance claimed the PR and skip to next unclaimed PR.
+    testing: |
+      Test with two Review Rock instances running against same repository to verify
+      only one instance claims each PR.
+
+  skill_not_found_handling:
+    description: |
+      If a referenced skill is not installed in claudecode, Review Rock should
+      provide helpful error message guiding user to install the skill.
+    implementation: |
+      Parse claudecode CLI error output for "skill not found" pattern. Log clear
+      message: "Skill 'frontend-review' not found. Install with: claudecode skill add <skill-url>"
+    testing: |
+      Test with missing skill to verify error detection and helpful messaging.

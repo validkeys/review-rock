@@ -1,0 +1,411 @@
+milestone: m5
+name: Testing & Error Handling
+generated: "2026-03-30T18:00:00Z"
+
+style_anchors:
+  - path: ~/Sites/ai-use-repos/effect/examples/test-layers.ts
+    lines: 1-100
+    description: |
+      Example of Effect test layers for mocking services in tests.
+      Shows how to provide test implementations and verify behavior.
+  - path: ~/Sites/ai-use-repos/EffectPatterns/error-testing.ts
+    lines: 1-80
+    description: |
+      Pattern for testing error scenarios with Effect.
+      Shows how to test error channels and error recovery.
+
+global_constraints:
+  allowed_patterns:
+    - "Use @effect/vitest for Effect-aware tests"
+    - "Use Effect.provide with test layers for mocking"
+    - "Use it.effect for test cases that return Effect"
+    - "Test both success and error paths"
+    - "Use vitest coverage reports"
+  forbidden_patterns:
+    - "Skipping error scenario tests"
+    - "Hard-coded mocks without type safety"
+    - "Tests that don't clean up resources"
+    - "Ignoring race conditions in concurrent tests"
+  tdd_required: true
+  max_task_duration_minutes: 150
+  commit_strategy: "Commit after each task"
+
+quality_gates:
+  - stage: pre-commit
+    commands:
+      - pnpm run typecheck
+      - pnpm run lint
+      - pnpm run test
+      - pnpm run test:coverage
+  - stage: task-completion
+    criteria:
+      - All tests passing
+      - Code coverage ≥80%
+      - No type errors
+      - All error scenarios tested
+
+tasks:
+  - id: m5-001
+    name: Configure vitest with coverage reporting
+    description: |
+      Set up vitest with @effect/vitest integration and coverage reporting.
+      Configure coverage thresholds and exclusions.
+    estimate_minutes: 45
+    type: config
+    dependencies: []
+    files:
+      create:
+        - vitest.config.ts
+      modify:
+        - package.json
+      touch_only: []
+    instructions: |
+      **Objective:**
+      Configure vitest for Effect-aware testing with coverage tracking.
+
+      **Implementation Steps:**
+      1. Create vitest.config.ts:
+         - Import defineConfig from vitest/config
+         - Set test.globals: true
+         - Set test.coverage.provider: 'v8'
+         - Set coverage thresholds:
+           - statements: 80
+           - branches: 80
+           - functions: 80
+           - lines: 80
+         - Exclude: tests/, dist/, node_modules/
+      2. Update package.json scripts:
+         - "test:coverage": "vitest run --coverage"
+         - "test:watch": "vitest watch"
+      3. Install @vitest/coverage-v8 if not present
+
+      **Constraints:**
+      - Use v8 coverage provider (faster than istanbul)
+      - Set 80% coverage threshold as per requirements
+      - Exclude test files from coverage reports
+
+      **TDD Checklist:**
+      - N/A (configuration)
+
+      **Validation:**
+      ```bash
+      pnpm test:coverage
+      ```
+      Expected: Coverage report generated (may fail threshold initially)
+
+      **Drift Policy:**
+      If vitest config errors occur, check vitest version compatibility.
+
+    validation:
+      commands:
+        - pnpm run typecheck
+        - pnpm test -- --run
+      expected_output: "Tests run successfully"
+      on_failure: "Review vitest configuration"
+
+  - id: m5-002
+    name: Add integration tests for gh CLI operations
+    description: |
+      Create integration tests that verify GitHubService works with real gh CLI.
+      Requires gh authentication in test environment.
+    estimate_minutes: 90
+    type: test
+    dependencies: [m5-001]
+    files:
+      create:
+        - tests/integration/github-cli.integration.test.ts
+      modify: []
+      touch_only:
+        - src/services/github.ts
+    instructions: |
+      **Objective:**
+      Verify GitHubService integrates correctly with gh CLI.
+
+      **Implementation Steps:**
+      1. Create integration test file with skipIf guard:
+         - Skip if GH_TOKEN env var not set
+         - Skip if gh command not available
+      2. Test against a known public repository (e.g., "cli/cli"):
+         - listOpenPRs: should return array of PRs
+         - getPRDetails: should fetch details for specific PR
+         - getPRDiff: should return diff content
+      3. DO NOT test claimPR or postComment (requires write access)
+      4. Add clear documentation about test prerequisites
+
+      **Constraints:**
+      - Use skipIf to skip tests in CI without gh auth
+      - Only test read operations (no writes to real repos)
+      - Use public repository for testing (no private data)
+      - Add timeout for network operations
+
+      **TDD Checklist:**
+      - [ ] Write test for listOpenPRs with real gh CLI
+      - [ ] Write test for getPRDetails with real gh CLI
+      - [ ] Write test for getPRDiff with real gh CLI
+      - [ ] Add skipIf guards for missing gh CLI or auth
+      - [ ] Run tests with gh authenticated
+
+      **Validation:**
+      ```bash
+      # With gh CLI authenticated:
+      pnpm test tests/integration/github-cli.integration.test.ts
+      ```
+      Expected: Integration tests pass with real gh CLI
+
+      **Drift Policy:**
+      If gh CLI behavior differs from mocks, update mocks to match reality.
+
+    validation:
+      commands:
+        - pnpm test tests/integration/github-cli.integration.test.ts
+      expected_output: "Integration tests pass (or skip if gh not configured)"
+      on_failure: "Review gh CLI integration and test prerequisites"
+
+  - id: m5-003
+    name: Add error scenario tests for token expiry and rate limits
+    description: |
+      Comprehensive error testing for AWS token expiry, GitHub rate limits,
+      network failures, and other failure modes.
+    estimate_minutes: 90
+    type: test
+    dependencies: [m5-002]
+    files:
+      create:
+        - tests/error-scenarios/aws-token-expiry.test.ts
+        - tests/error-scenarios/rate-limits.test.ts
+        - tests/error-scenarios/network-failures.test.ts
+      modify: []
+      touch_only:
+        - src/services/review.ts
+        - src/services/github.ts
+    instructions: |
+      **Objective:**
+      Test all identified error scenarios to ensure proper handling.
+
+      **Implementation Steps:**
+      1. Create aws-token-expiry.test.ts:
+         - Mock ReviewService with expired token stderr
+         - Verify AWSTokenExpiredError is returned
+         - Verify helpful error message is included
+         - Verify no retry occurs (non-transient error)
+      2. Create rate-limits.test.ts:
+         - Mock GitHubService with rate limit error
+         - Verify retry logic with exponential backoff
+         - Verify eventual success after rate limit clears
+      3. Create network-failures.test.ts:
+         - Mock transient network errors (ECONNREFUSED, timeout)
+         - Verify retry logic works correctly
+         - Verify failure after max retries
+
+      **Constraints:**
+      - Use Effect test layers for mocking
+      - Test both error detection and recovery
+      - Verify retry vs no-retry logic for each error type
+
+      **TDD Checklist:**
+      - [ ] Write test for AWS token expiry (no retry)
+      - [ ] Write test for GitHub rate limit (with retry)
+      - [ ] Write test for network timeout (with retry)
+      - [ ] Write test for max retries exceeded
+      - [ ] Run all error scenario tests
+
+      **Validation:**
+      ```bash
+      pnpm test tests/error-scenarios/
+      ```
+      Expected: All error scenario tests pass
+
+      **Drift Policy:**
+      If error handling behavior is incorrect, STOP and fix before continuing.
+
+    validation:
+      commands:
+        - pnpm test tests/error-scenarios/
+      expected_output: "All error scenario tests pass"
+      on_failure: "Review error handling logic and retry policies"
+
+  - id: m5-004
+    name: Add concurrent instance coordination tests
+    description: |
+      Test that multiple Review Rock instances can run concurrently
+      without claiming the same PR twice (label atomicity test).
+    estimate_minutes: 90
+    type: test
+    dependencies: [m5-003]
+    files:
+      create:
+        - tests/integration/concurrent-instances.test.ts
+      modify: []
+      touch_only:
+        - src/services/github.ts
+        - src/services/polling.ts
+    instructions: |
+      **Objective:**
+      Verify distributed coordination via GitHub label atomicity.
+
+      **Implementation Steps:**
+      1. Create concurrent-instances.test.ts:
+         - Simulate two PollingService instances running simultaneously
+         - Both attempt to claim same PR
+         - Use mock GitHubService that simulates label add race condition:
+           a. First instance succeeds (label added)
+           b. Second instance gets "label already exists" error
+         - Verify only one instance processes the PR
+         - Verify second instance skips to next PR
+      2. Add test for claim release on error:
+         - Instance claims PR successfully
+         - Workflow fails (e.g., review generation error)
+         - Verify claim label is removed (allows retry by other instance)
+
+      **Constraints:**
+      - Use Effect.fork to simulate concurrent execution
+      - Mock GitHubService to control race condition timing
+      - Verify exactly one PR processing occurs
+
+      **TDD Checklist:**
+      - [ ] Write test for concurrent claim attempts
+      - [ ] Write test for first succeeds, second skips
+      - [ ] Write test for claim release on workflow error
+      - [ ] Run concurrent coordination tests
+      - [ ] Verify no duplicate processing
+
+      **Validation:**
+      ```bash
+      pnpm test tests/integration/concurrent-instances.test.ts
+      ```
+      Expected: Concurrent coordination tests pass
+
+      **Drift Policy:**
+      If race conditions occur, STOP and review label claiming logic.
+      Atomicity must be guaranteed for MVP to work.
+
+    validation:
+      commands:
+        - pnpm test tests/integration/concurrent-instances.test.ts
+      expected_output: "Concurrent instance tests pass"
+      on_failure: "Review label atomicity and coordination logic"
+
+  - id: m5-005
+    name: Achieve 80% code coverage with additional tests
+    description: |
+      Identify uncovered code paths and add tests to reach 80% coverage target.
+      Focus on edge cases and boundary conditions.
+    estimate_minutes: 120
+    type: test
+    dependencies: [m5-004]
+    files:
+      create:
+        - tests/edge-cases/empty-pr.test.ts
+        - tests/edge-cases/special-characters.test.ts
+        - tests/edge-cases/large-diff.test.ts
+      modify:
+        - tests/services/*.test.ts
+      touch_only: []
+    instructions: |
+      **Objective:**
+      Reach 80% code coverage by testing edge cases and uncovered paths.
+
+      **Implementation Steps:**
+      1. Run coverage report to identify gaps:
+         - pnpm test:coverage
+         - Review coverage/index.html for uncovered lines
+      2. Add tests for edge cases:
+         - Empty PR (no files changed)
+         - PR with special characters in title/description
+         - Very large diff (test truncation/limits)
+         - Config with missing optional fields
+         - Polling with no open PRs
+      3. Add tests for uncovered error paths:
+         - JSON parse errors in GitHub responses
+         - Invalid UTF-8 in diff content
+         - Command execution timeout
+      4. Run coverage again and verify ≥80%
+
+      **Constraints:**
+      - Focus on meaningful tests (not just coverage numbers)
+      - Test realistic edge cases that could occur in production
+      - Document why certain paths are untestable (if any)
+
+      **TDD Checklist:**
+      - [ ] Run coverage report to identify gaps
+      - [ ] Write tests for empty PR scenario
+      - [ ] Write tests for special characters
+      - [ ] Write tests for large diff handling
+      - [ ] Write tests for uncovered error paths
+      - [ ] Verify coverage ≥80%
+
+      **Validation:**
+      ```bash
+      pnpm test:coverage
+      ```
+      Expected: Coverage report shows ≥80% for statements, branches, functions, lines
+
+      **Drift Policy:**
+      If 80% coverage is not achievable, document why and which code is untestable.
+      Adjust threshold if necessary (must justify).
+
+    validation:
+      commands:
+        - pnpm test:coverage
+      expected_output: "Coverage ≥80% across all metrics"
+      on_failure: "Add more tests or document untestable code"
+
+  - id: m5-006
+    name: Add end-to-end smoke test
+    description: |
+      Create manual smoke test script that runs complete workflow
+      from polling to comment posting using test repository.
+    estimate_minutes: 60
+    type: test
+    dependencies: [m5-005]
+    files:
+      create:
+        - tests/e2e/smoke-test.md
+        - scripts/smoke-test.sh
+      modify: []
+      touch_only: []
+    instructions: |
+      **Objective:**
+      Create runnable smoke test for manual validation of complete system.
+
+      **Implementation Steps:**
+      1. Create tests/e2e/smoke-test.md with manual test plan:
+         - Prerequisites: gh CLI authenticated, claudecode authenticated
+         - Setup: Create test PR in test repository
+         - Steps:
+           a. Run review-rock <test-repo>
+           b. Verify polling starts
+           c. Verify PR is claimed (label added)
+           d. Verify review is generated
+           e. Verify comment is posted to PR
+         - Cleanup: Remove claim label, close test PR
+      2. Create scripts/smoke-test.sh (optional automation):
+         - Create test PR programmatically
+         - Run review-rock for one cycle
+         - Verify comment was posted
+         - Clean up
+
+      **Constraints:**
+      - Use test repository (not production)
+      - Document all prerequisites clearly
+      - Make test repeatable and idempotent
+
+      **TDD Checklist:**
+      - N/A (manual test documentation)
+
+      **Validation:**
+      ```bash
+      # Manual:
+      cat tests/e2e/smoke-test.md
+      # Follow steps to verify end-to-end functionality
+      ```
+      Expected: Smoke test document is clear and executable
+
+      **Drift Policy:**
+      If smoke test reveals integration issues, STOP and fix before release.
+
+    validation:
+      commands:
+        - test -f tests/e2e/smoke-test.md
+      expected_output: "Smoke test documentation exists"
+      on_failure: "Create smoke test documentation"

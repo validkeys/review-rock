@@ -1,0 +1,501 @@
+implementation_plan_review:
+  metadata:
+    plan_files:
+      - milestones.yaml
+      - milestone-m0.tasks.yaml
+      - milestone-m1.tasks.yaml
+      - milestone-m2.tasks.yaml
+      - milestone-m3.tasks.yaml
+      - milestone-m4.tasks.yaml
+      - milestone-m5.tasks.yaml
+      - milestone-m6.tasks.yaml
+    review_date: "2026-03-30T18:30:00Z"
+    reviewer: implementation-plan-review skill
+    business_requirements_file: business-requirements.yaml
+    technical_requirements_file: technical-requirements.yaml
+
+  overall_scores:
+    structure: 10
+    best_practices_compliance: 9
+    task_sizing: 9
+    completeness: 10
+    alignment: 10
+    development_readiness: 9
+
+  summary:
+    total_milestones: 7
+    total_tasks: 39
+    estimated_total_duration: 11-16 days
+    critical_path_duration: 11-16 days (sequential strategy)
+
+    task_sizing_summary:
+      too_small: 0
+      optimal: 39
+      too_large: 0
+      percentage_optimal: 100%
+
+    compliance_summary:
+      style_anchors_present: 7/7 milestones
+      tdd_checklists_present: 32/33 code tasks (97%)
+      drift_policies_present: 39/39 tasks (100%)
+      quality_gates_defined: yes
+      effect_patterns_enforced: yes
+
+  readiness_assessment:
+    ready_for_development: yes
+    blocking_issues: 0
+    high_priority_recommendations: 2
+    medium_priority_recommendations: 3
+
+    estimated_effort_to_fix:
+      critical: 0 hours
+      high: 1-2 hours
+      medium: 2-3 hours
+
+    timeline_impact:
+      if_fixed: minimal (0-1 day)
+      if_not_fixed: low risk
+
+    overall_verdict: |
+      This implementation plan is READY FOR DEVELOPMENT. The plan demonstrates excellent
+      adherence to best practices with comprehensive task sizing, TDD requirements, drift
+      policies, and style anchors throughout. The Effect-TS patterns are consistently
+      enforced, and the Foundation-First strategy is appropriate for this greenfield build.
+
+      A few minor improvements are recommended but not blocking. The plan is well-structured,
+      thoroughly documented, and ready to execute.
+
+  critical_issues: []
+
+  high_priority_issues:
+    - category: style_anchors
+      severity: high
+      issue: Style anchor paths reference ~/Sites/ai-use-repos/* which may not exist on developer machines
+      affected_items:
+        - All milestone task files (m0-m6)
+      recommendation: |
+        Verify style anchor repositories exist at specified paths before development starts.
+        Consider one of:
+        1. Clone repositories to ~/Sites/ai-use-repos/ before starting
+        2. Update style anchor paths to actual locations
+        3. Add setup task in m0 to clone style anchor repositories
+        4. Document style anchor setup in project README
+      rationale: |
+        If style anchors don't exist, developers won't have reference implementations,
+        potentially leading to incorrect Effect-TS patterns and drift from intended architecture.
+      blocks_development: false
+      workaround: Developers can reference Effect documentation directly, but examples may differ
+
+    - category: integration_testing
+      severity: high
+      issue: Integration tests require external CLI tools (gh, claudecode) but no setup validation
+      affected_items:
+        - m5-002 (gh CLI integration tests)
+        - m3-006 (claudecode integration tests)
+        - m5-006 (smoke test)
+      recommendation: |
+        Add m0 task to validate prerequisites:
+        - Check gh CLI is installed and authenticated
+        - Check claudecode is installed and authenticated
+        - Verify AWS credentials are configured
+        - Create prerequisite validation script that can be run before development
+      rationale: |
+        Without validated prerequisites, developers may not discover missing tools until
+        integration testing phase, causing delays and context switching.
+      blocks_development: false
+      workaround: Manual prerequisite verification by each developer
+
+  medium_priority_issues:
+    - category: task_organization
+      severity: medium
+      issue: m4-003 (GitHubService.postComment) could have been in m1 with other GitHub methods
+      affected_items:
+        - m4-003 (implements postComment)
+      recommendation: |
+        Consider moving postComment implementation to m1 (GitHub Integration Service milestone)
+        to keep all GitHub service methods together. This would improve code cohesion and make
+        m1 truly complete the GitHub integration layer.
+      rationale: |
+        Grouping related functionality improves code organization and reduces context switching.
+        However, current placement ensures workflow orchestration (m4-002) is complete before
+        implementing the final step.
+      impact: low (organizational preference, both approaches are valid)
+
+    - category: error_handling
+      severity: medium
+      issue: Claim label release on workflow error mentioned in m5-004 but not implemented in workflow tasks
+      affected_items:
+        - m4-002 (workflow orchestration)
+        - m5-004 (concurrent instances test mentions claim release)
+      recommendation: |
+        Add explicit task or instruction in m4-002 to implement claim label removal on workflow
+        errors. This is critical for distributed coordination - if a workflow fails after claiming
+        a PR, the label should be removed so another instance can retry.
+
+        Suggested implementation:
+        - Wrap workflow in Effect.ensuring or Effect.onInterrupt
+        - On error/interruption, call GitHubService.removeLabel
+        - Add unit test for claim release on error
+      rationale: |
+        Without claim release on error, PRs can get stuck with claim labels but no review,
+        requiring manual intervention.
+      impact: medium (functional gap, but can be added during m4 or m5)
+
+    - category: configuration
+      severity: medium
+      issue: Configuration file loading not fully specified in m0-003
+      affected_items:
+        - m0-003 (ConfigService implementation)
+        - m4-005 (main.ts loads config)
+      recommendation: |
+        Clarify configuration loading strategy in m0-003:
+        - Should config file be required or optional?
+        - What's the precedence: env vars > config file > defaults?
+        - Should config file path be configurable via CLI option or env var?
+        - Should validation errors fail fast or use defaults?
+
+        Update m0-003 instructions to specify:
+        1. Try loading review-rock.config.ts from cwd
+        2. If not found, use environment variables + defaults
+        3. Validate final config against schema
+        4. Return ConfigError on validation failure
+      rationale: |
+        Ambiguous config loading can lead to unexpected behavior and debugging difficulties.
+      impact: medium (can be clarified during implementation)
+
+  best_practices_violations: []
+
+  strong_areas:
+    - "Excellent task sizing: All 39 tasks are within optimal 30-150 minute range"
+    - "Comprehensive TDD checklists: 97% of code tasks have detailed TDD requirements"
+    - "Consistent drift policies: Every task has clear drift detection and handling guidance"
+    - "Strong style anchors: Every milestone references 2-3 concrete examples from Effect repositories"
+    - "Clear quality gates: Pre-commit and task-completion criteria defined for all milestones"
+    - "Effect-TS patterns enforced: Consistent use of Effect.Service, Effect.provide, tagged errors"
+    - "Realistic estimates: Task estimates account for testing, error handling, and edge cases"
+    - "Sequential dependencies: Clear dependency chain prevents parallel work conflicts"
+    - "Error scenario coverage: Comprehensive error testing in m5 (token expiry, rate limits, skill not found)"
+    - "Documentation milestone: Dedicated m6 ensures release-ready documentation"
+
+  detailed_findings:
+    structure_validation:
+      file_integrity: all_files_present
+      yaml_syntax: valid
+      reference_integrity: all_dependencies_valid
+      milestone_count: 7
+      task_count: 39
+      dependency_graph: "Sequential with some opportunities for parallelization within milestones"
+
+    style_anchors:
+      compliance: excellent
+      per_milestone:
+        m0:
+          count: 2
+          paths:
+            - ~/Sites/ai-use-repos/effect/examples/effect-config.ts
+            - ~/Sites/ai-use-repos/EffectPatterns/config-service-pattern.ts
+          quality: good (specific line ranges, clear descriptions)
+        m1:
+          count: 3
+          paths:
+            - ~/Sites/ai-use-repos/effect/examples/process-command.ts
+            - ~/Sites/ai-use-repos/EffectPatterns/retry-schedule-pattern.ts
+            - ~/Sites/ai-use-repos/EffectPatterns/service-pattern.ts
+          quality: excellent (comprehensive coverage of patterns)
+        m2:
+          count: 2
+          paths:
+            - ~/Sites/ai-use-repos/EffectPatterns/service-pattern.ts
+            - ~/Sites/ai-use-repos/effect/examples/data-validation.ts
+          quality: good
+        m3:
+          count: 3
+          paths:
+            - ~/Sites/ai-use-repos/effect/examples/process-command.ts
+            - ~/Sites/ai-use-repos/EffectPatterns/retry-schedule-pattern.ts
+            - ~/Sites/ai-use-repos/EffectPatterns/tagged-errors.ts
+          quality: excellent (error handling well-documented)
+        m4:
+          count: 3
+          paths:
+            - ~/Sites/ai-use-repos/effect/examples/cli-command.ts
+            - ~/Sites/ai-use-repos/EffectPatterns/service-composition.ts
+            - ~/Sites/ai-use-repos/EffectPatterns/logger-pattern.ts
+          quality: excellent (covers CLI and orchestration)
+        m5:
+          count: 2
+          paths:
+            - ~/Sites/ai-use-repos/effect/examples/test-layers.ts
+            - ~/Sites/ai-use-repos/EffectPatterns/error-testing.ts
+          quality: good
+        m6:
+          count: 1
+          paths:
+            - ~/Sites/ai-use-repos/effect/README.md
+          quality: good
+      issues:
+        - "Style anchor paths assume ~/Sites/ai-use-repos/ exists - needs verification"
+
+    task_sizing:
+      distribution:
+        "30-45 minutes": 8 tasks
+        "45-60 minutes": 10 tasks
+        "60-75 minutes": 8 tasks
+        "75-90 minutes": 8 tasks
+        "90-120 minutes": 5 tasks
+      average_estimate: 66 minutes
+      median_estimate: 60 minutes
+      analysis: |
+        Excellent task sizing distribution. All tasks are within the optimal 30-150 minute range.
+        No tasks are too small (<30m) or too large (>150m). The average of 66 minutes is ideal
+        for maintaining focus and committing frequently. The distribution shows appropriate
+        variation based on task complexity.
+
+    tdd_compliance:
+      total_code_tasks: 33
+      tasks_with_tdd_checklist: 32
+      tasks_without_tdd: 1
+      missing_tdd:
+        - m0-001 (N/A - configuration setup)
+      tdd_quality: excellent
+      analysis: |
+        TDD checklists are comprehensive and well-structured. Each checklist follows proper
+        TDD flow: write tests first, implement to pass, refactor. Tests cover both success
+        and error paths. The one task without TDD (m0-001) is appropriately excluded as it's
+        pure configuration setup.
+
+    drift_policy:
+      total_tasks: 39
+      tasks_with_drift_policy: 39
+      coverage: 100%
+      quality: excellent
+      analysis: |
+        Every task has a clear drift policy with specific guidance on when to stop, what
+        errors to watch for, and how to handle deviations. Policies are tailored to each
+        task's context (e.g., "If Command API differs, update to match @effect/platform version").
+
+    quality_gates:
+      defined: yes
+      per_milestone: consistent
+      pre_commit_checks:
+        - pnpm run typecheck
+        - pnpm run lint
+        - pnpm run test
+      task_completion_criteria:
+        - All tests passing
+        - No type errors
+        - No lint errors
+        - (Milestone-specific criteria)
+      coverage_requirement: "80% (m5)"
+      analysis: |
+        Quality gates are well-defined and consistent across milestones. Pre-commit checks
+        ensure code quality at every step. Task completion criteria are clear and measurable.
+        Coverage threshold is explicitly set in m5-001.
+
+    dependency_analysis:
+      strategy: Foundation-First (Sequential)
+      critical_path:
+        - m0 (Project Foundation)
+        - m1 (GitHub Integration)
+        - m2 (PR Classification)
+        - m3 (Review Service)
+        - m4 (CLI & Integration)
+        - m5 (Testing)
+        - m6 (Documentation)
+      duration: 11-16 days
+      parallelization_opportunities:
+        - Within m1: m1-002 through m1-004 could be partially parallel after m1-001
+        - Within m3: Error detection tasks (m3-003, m3-004) could be parallel
+        - m6 tasks could be parallelized (docs can be written independently)
+      blocked_by: none
+      circular_dependencies: none
+      analysis: |
+        Sequential strategy is appropriate for greenfield build. Dependencies are clean and
+        logical. Each milestone builds on previous work. Some within-milestone parallelization
+        is possible but not critical given the 2-4 week timeline.
+
+    requirements_coverage:
+      business_requirements:
+        FR-1: Covered by m1 (PollingService)
+        FR-2: Covered by m1 (GitHubService shells out to gh)
+        FR-3: Covered by m1 (claimPR with atomic labeling)
+        FR-4: Covered by m2 (ClassificationService)
+        FR-5: Covered by m2 (frontendPaths configuration)
+        FR-6: Covered by m2, m4 (skill selection in workflow)
+        FR-7: Covered by m3 (ReviewService calls claudecode/Bedrock)
+        FR-8: Covered by m3 (uses existing AWS environment variables)
+        FR-9: Covered by m4 (GitHubService.postComment)
+        FR-10: Covered by m0, m4 (CLI accepts repository argument)
+        FR-11: Covered by m1, m3 (Effect.retry with exponential backoff)
+        FR-12: Covered by m4 (Effect Logger)
+        FR-13: Covered by m0 (ConfigService with configurable options)
+      coverage_percentage: 100%
+      gaps: none
+
+      technical_requirements:
+        effect_ts_architecture: Covered throughout (Effect.Service, Effect.provide)
+        github_cli: Covered in m1
+        claudecode_cli: Covered in m3
+        aws_sso_token_expiry: Covered in m3 (error detection)
+        label_atomicity: Covered in m1, m5 (implementation + testing)
+        polling_with_schedule: Covered in m1 (Effect.repeat with Schedule.spaced)
+        80_percent_coverage: Covered in m5 (explicit goal)
+      coverage_percentage: 100%
+      gaps: none
+
+  optimization_opportunities:
+    - type: parallelization
+      description: Within-milestone task parallelization for experienced teams
+      benefit: "Reduce timeline by 1-2 days"
+      affected_items:
+        - m1-002, m1-003, m1-004 (GitHub service methods)
+        - m3-003, m3-004 (error detection helpers)
+        - m6-001, m6-002, m6-003 (documentation tasks)
+      recommendation: |
+        For teams with multiple developers, these tasks could be parallelized:
+        - m1: After interface definition, implement GitHub methods in parallel
+        - m3: Error detection helpers are independent
+        - m6: Documentation can be written by different people simultaneously
+
+        However, for solo development or small teams, sequential is safer.
+
+    - type: testing
+      description: Add property-based testing for edge cases
+      benefit: "Increased confidence in classification and parsing logic"
+      affected_items:
+        - m2 (ClassificationService)
+        - m1, m3 (JSON parsing in GitHub/Review services)
+      recommendation: |
+        Consider adding fast-check or Effect's built-in property testing for:
+        - Path classification with random file paths
+        - JSON parsing with malformed inputs
+        - Command output parsing with edge cases
+
+        This is optional but would increase robustness.
+
+    - type: documentation
+      description: Add architecture decision records during implementation
+      benefit: "Capture design decisions as they're made"
+      affected_items:
+        - All milestones
+      recommendation: |
+        As developers encounter architectural decisions during implementation,
+        document them in adrs/ directory (similar to what architecture-decision-record
+        skill would generate). This creates a living record of "why" decisions were made.
+
+  specific_recommendations:
+    - priority: high
+      category: setup
+      recommendation: |
+        Add prerequisite validation task to m0 (as m0-000):
+        - Check Node.js version >= 18
+        - Check pnpm version >= 8
+        - Check gh CLI is installed: which gh
+        - Check gh is authenticated: gh auth status
+        - Check claudecode is installed: which claudecode
+        - Check AWS credentials: aws sts get-caller-identity
+        - Clone style anchor repositories to ~/Sites/ai-use-repos/
+
+        This ensures developers have all prerequisites before starting implementation.
+      rationale: |
+        Early prerequisite validation prevents mid-development blockers and context switching.
+
+    - priority: high
+      category: error_handling
+      recommendation: |
+        Update m4-002 (workflow orchestration) to explicitly handle claim label release on error.
+        Add Effect.ensuring block that removes claim label if workflow fails after claiming.
+        Add unit test for this behavior.
+      rationale: |
+        Critical for distributed coordination. Without this, failed workflows leave PRs stuck.
+
+    - priority: medium
+      category: configuration
+      recommendation: |
+        Clarify configuration loading in m0-003:
+        - Specify file path resolution (cwd vs absolute)
+        - Define precedence: env vars > config file > defaults
+        - Document behavior when config file is missing (error or use defaults?)
+      rationale: |
+        Clear configuration behavior prevents confusion during setup and deployment.
+
+    - priority: medium
+      category: testing
+      recommendation: |
+        In m5-002 (gh CLI integration tests), add README note about test repository setup.
+        Consider creating a dedicated test repository (e.g., "review-rock/test-repo") with
+        known PRs for consistent integration testing.
+      rationale: |
+        Relying on external repositories (like cli/cli) for tests can be brittle if their
+        PR structure changes. A controlled test repository ensures consistent test behavior.
+
+    - priority: low
+      category: optimization
+      recommendation: |
+        Consider adding m4 task to implement graceful shutdown handler that:
+        - Finishes current PR processing before stopping
+        - Releases claim labels on interruption
+        - Logs shutdown reason
+      rationale: |
+        Improves operational reliability when stopping Review Rock instances.
+
+  gaps:
+    missing_coverage: []
+    missing_task_types: []
+    undocumented_assumptions:
+      - assumption: "Style anchor repositories at ~/Sites/ai-use-repos/ exist"
+        recommendation: "Document setup in README or add clone task to m0"
+      - assumption: "Developers have AWS Bedrock access configured"
+        recommendation: "Add prerequisite validation for AWS credentials"
+      - assumption: "GitHub CLI is authenticated with sufficient permissions"
+        recommendation: "Add prerequisite validation for gh auth status"
+      - assumption: "claudecode CLI is installed and authenticated"
+        recommendation: "Add prerequisite validation for claudecode availability"
+
+  final_summary:
+    verdict: READY_FOR_DEVELOPMENT
+    confidence: high
+    blockers: 0
+    high_priority_items: 2
+    medium_priority_items: 3
+    low_priority_items: 1
+
+    next_steps:
+      - "Address high-priority recommendations (1-2 hours)"
+      - "Verify style anchor repository paths before starting m0"
+      - "Begin implementation with m0-001"
+      - "Follow TDD checklists strictly for each task"
+      - "Commit after each completed task"
+
+    timeline_confidence: high
+    estimated_completion: "11-16 days as planned (no adjustment needed)"
+
+    strengths:
+      - "Exceptional adherence to best practices"
+      - "Comprehensive task sizing and TDD coverage"
+      - "Clear drift policies and quality gates"
+      - "Strong Effect-TS pattern enforcement"
+      - "Complete requirements coverage"
+      - "Realistic estimates with buffer"
+
+    areas_for_improvement:
+      - "Validate style anchor paths before starting"
+      - "Add prerequisite validation to m0"
+      - "Clarify claim label release on workflow errors"
+      - "Document configuration loading precedence"
+
+    overall_assessment: |
+      This is an exemplary implementation plan that demonstrates mastery of planning
+      best practices. The plan is comprehensive, well-structured, and ready for
+      immediate development. The few recommendations are minor improvements that
+      won't significantly impact timeline or quality.
+
+      The plan shows excellent attention to:
+      - Task sizing (100% optimal)
+      - TDD requirements (97% coverage)
+      - Drift prevention (100% coverage)
+      - Style anchors (consistent Effect patterns)
+      - Error handling (comprehensive scenarios)
+      - Testing strategy (80% coverage goal)
+
+      Development can begin immediately with high confidence of success.

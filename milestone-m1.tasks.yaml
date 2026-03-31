@@ -1,0 +1,390 @@
+milestone: m1
+name: GitHub Integration Service
+generated: "2026-03-30T18:00:00Z"
+
+style_anchors:
+  - path: ~/Sites/ai-use-repos/effect/examples/process-command.ts
+    lines: 1-120
+    description: |
+      Example of using @effect/platform Command to spawn subprocesses.
+      Shows proper error handling, stdout/stderr capture, and exit code checking.
+  - path: ~/Sites/ai-use-repos/EffectPatterns/retry-schedule-pattern.ts
+    lines: 1-60
+    description: |
+      Pattern for Effect.retry with Schedule.exponential for resilient operations.
+      Demonstrates backoff strategies and error handling.
+  - path: ~/Sites/ai-use-repos/EffectPatterns/service-pattern.ts
+    lines: 1-100
+    description: |
+      Effect.Service definition pattern with Effect.provide for dependency injection.
+      Shows how to create service interfaces and live implementations.
+
+global_constraints:
+  allowed_patterns:
+    - "Use @effect/platform Command for subprocess execution"
+    - "Use Effect.retry with Schedule for resilient operations"
+    - "Use Effect.Service for all service definitions"
+    - "Use Effect.repeat with Schedule.spaced for polling"
+    - "Use tagged errors with Data.TaggedError"
+  forbidden_patterns:
+    - "Direct child_process.spawn calls"
+    - "setTimeout or setInterval for polling"
+    - "Untyped Error objects (use tagged errors)"
+    - "Any async/await in service methods"
+  tdd_required: true
+  max_task_duration_minutes: 150
+  commit_strategy: "Commit after each task"
+
+quality_gates:
+  - stage: pre-commit
+    commands:
+      - pnpm run typecheck
+      - pnpm run lint
+      - pnpm run test
+  - stage: task-completion
+    criteria:
+      - All tests passing
+      - No type errors
+      - No lint errors
+      - Services follow Effect patterns from style anchors
+
+tasks:
+  - id: m1-001
+    name: Define GitHubService interface and error types
+    description: |
+      Create GitHubService interface with methods for PR operations:
+      listOpenPRs, claimPR, getPRDetails, getPRDiff.
+      Define tagged errors for GitHub operations.
+    estimate_minutes: 45
+    type: code
+    dependencies: []
+    files:
+      create:
+        - src/services/github.ts
+        - src/errors/github.ts
+        - tests/services/github.test.ts
+      modify: []
+      touch_only: []
+    instructions: |
+      **Objective:**
+      Define GitHubService interface and error types for GitHub CLI operations.
+
+      **Implementation Steps:**
+      1. Create src/errors/github.ts with tagged errors:
+         - GitHubCommandError (command, stderr, exitCode)
+         - PRNotFoundError (prNumber)
+         - LabelClaimFailedError (prNumber, reason)
+      2. Create src/services/github.ts with interface:
+         - listOpenPRs(repo: string): Effect<PR[], GitHubCommandError>
+         - claimPR(repo: string, prNumber: number, label: string): Effect<void, LabelClaimFailedError>
+         - getPRDetails(repo: string, prNumber: number): Effect<PRDetails, PRNotFoundError>
+         - getPRDiff(repo: string, prNumber: number): Effect<string, GitHubCommandError>
+      3. Define PR and PRDetails types with necessary fields
+      4. Use Data.TaggedError for all error types
+
+      **Constraints:**
+      - ONLY use Data.TaggedError from effect/Data
+      - Follow Effect.Service pattern from style anchor
+      - NO implementation yet (interface only)
+
+      **TDD Checklist:**
+      - [ ] Write test stub for GitHubService (will implement in next tasks)
+      - [ ] Verify error types compile correctly
+      - [ ] Verify service interface compiles
+
+      **Validation:**
+      ```bash
+      pnpm run typecheck
+      ```
+      Expected: Interface and error types compile successfully
+
+      **Drift Policy:**
+      If Data.TaggedError is not available, verify Effect version.
+
+    validation:
+      commands:
+        - pnpm run typecheck
+      expected_output: "No type errors"
+      on_failure: "Review Error type definitions and service interface"
+
+  - id: m1-002
+    name: Implement GitHubService.listOpenPRs
+    description: |
+      Implement listOpenPRs method that shells out to gh CLI to fetch open PRs.
+      Parse JSON output and return typed PR array.
+    estimate_minutes: 75
+    type: code
+    dependencies: [m1-001]
+    files:
+      create: []
+      modify:
+        - src/services/github.ts
+        - tests/services/github.test.ts
+      touch_only:
+        - src/errors/github.ts
+    instructions: |
+      **Objective:**
+      Implement listOpenPRs using @effect/platform Command to execute gh CLI.
+
+      **Implementation Steps:**
+      1. Import Command from @effect/platform
+      2. Implement GitHubServiceLive with listOpenPRs:
+         - Execute: gh pr list --repo {repo} --json number,title,state,labels
+         - Parse JSON output to PR[] type
+         - Map exit code errors to GitHubCommandError
+         - Use Effect.retry with Schedule.exponential(1000ms, 2x) for resilience
+      3. Add unit tests with mocked Command execution
+
+      **Constraints:**
+      - ONLY use @effect/platform Command for subprocess execution
+      - Follow pattern in style anchor ~/Sites/ai-use-repos/effect/examples/process-command.ts
+      - Use Effect.retry for resilience (style anchor: retry-schedule-pattern.ts)
+
+      **TDD Checklist:**
+      - [ ] Write test for successful PR list (mock gh output)
+      - [ ] Write test for gh command failure (should return GitHubCommandError)
+      - [ ] Write test for JSON parse error
+      - [ ] Implement listOpenPRs to pass tests
+      - [ ] Verify retry logic with transient failures
+
+      **Validation:**
+      ```bash
+      pnpm test tests/services/github.test.ts -- listOpenPRs
+      ```
+      Expected: All listOpenPRs tests pass
+
+      **Drift Policy:**
+      If Command is not available, verify @effect/platform installation.
+      Do not use child_process directly.
+
+    validation:
+      commands:
+        - pnpm test tests/services/github.test.ts
+      expected_output: "Tests pass for listOpenPRs"
+      on_failure: "Review Command usage and error handling"
+
+  - id: m1-003
+    name: Implement GitHubService.claimPR with atomic labeling
+    description: |
+      Implement claimPR method that attempts to add claim label atomically.
+      Detect label already exists error to prevent duplicate claims.
+    estimate_minutes: 90
+    type: code
+    dependencies: [m1-002]
+    files:
+      create: []
+      modify:
+        - src/services/github.ts
+        - tests/services/github.test.ts
+      touch_only:
+        - src/errors/github.ts
+    instructions: |
+      **Objective:**
+      Implement atomic PR claiming via GitHub label operations.
+
+      **Implementation Steps:**
+      1. Implement claimPR method:
+         - Execute: gh pr edit {prNumber} --repo {repo} --add-label {label}
+         - Check exit code and stderr for "label already exists" pattern
+         - If label exists, return LabelClaimFailedError (another instance claimed)
+         - Otherwise return success
+      2. Add unit tests for:
+         - Successful claim (label added)
+         - Failed claim (label already exists)
+         - Command error (network failure, etc.)
+
+      **Constraints:**
+      - ONLY use gh pr edit --add-label for atomic operation
+      - Parse stderr to detect duplicate label scenario
+      - Follow Command pattern from style anchor
+
+      **TDD Checklist:**
+      - [ ] Write test for successful claim
+      - [ ] Write test for duplicate claim (label exists)
+      - [ ] Write test for command error
+      - [ ] Implement claimPR to pass all tests
+      - [ ] Verify atomicity assumption with integration test note
+
+      **Validation:**
+      ```bash
+      pnpm test tests/services/github.test.ts -- claimPR
+      ```
+      Expected: All claimPR tests pass
+
+      **Drift Policy:**
+      If gh pr edit behavior differs, STOP and document actual behavior.
+      Update implementation to match actual GitHub CLI response.
+
+    validation:
+      commands:
+        - pnpm test tests/services/github.test.ts
+      expected_output: "Tests pass for claimPR"
+      on_failure: "Review label claim logic and error detection"
+
+  - id: m1-004
+    name: Implement GitHubService.getPRDetails and getPRDiff
+    description: |
+      Implement remaining GitHubService methods for fetching PR details
+      and diff content via gh CLI.
+    estimate_minutes: 60
+    type: code
+    dependencies: [m1-003]
+    files:
+      create: []
+      modify:
+        - src/services/github.ts
+        - tests/services/github.test.ts
+      touch_only: []
+    instructions: |
+      **Objective:**
+      Complete GitHubService with PR details and diff retrieval.
+
+      **Implementation Steps:**
+      1. Implement getPRDetails:
+         - Execute: gh pr view {prNumber} --repo {repo} --json number,title,body,files
+         - Parse JSON to PRDetails type
+         - Return PRNotFoundError if PR doesn't exist
+      2. Implement getPRDiff:
+         - Execute: gh pr diff {prNumber} --repo {repo}
+         - Return diff as string
+         - Handle errors with GitHubCommandError
+      3. Add unit tests for both methods
+
+      **Constraints:**
+      - Use gh pr view and gh pr diff commands
+      - Follow established Command pattern
+      - Use Effect.retry for resilience
+
+      **TDD Checklist:**
+      - [ ] Write test for successful getPRDetails
+      - [ ] Write test for PR not found
+      - [ ] Write test for successful getPRDiff
+      - [ ] Write test for diff command failure
+      - [ ] Implement both methods to pass tests
+
+      **Validation:**
+      ```bash
+      pnpm test tests/services/github.test.ts
+      ```
+      Expected: All GitHubService tests pass
+
+      **Drift Policy:**
+      If gh output format differs, update parsers accordingly.
+
+    validation:
+      commands:
+        - pnpm test tests/services/github.test.ts
+        - pnpm run typecheck
+      expected_output: "All tests pass and types check"
+      on_failure: "Review JSON parsing and error handling"
+
+  - id: m1-005
+    name: Define PollingService interface
+    description: |
+      Create PollingService interface that uses Effect.repeat with
+      Schedule.spaced for polling GitHub at regular intervals.
+    estimate_minutes: 45
+    type: code
+    dependencies: [m1-004]
+    files:
+      create:
+        - src/services/polling.ts
+        - tests/services/polling.test.ts
+      modify: []
+      touch_only: []
+    instructions: |
+      **Objective:**
+      Define PollingService interface for repeating operations on a schedule.
+
+      **Implementation Steps:**
+      1. Create src/services/polling.ts with interface:
+         - startPolling(repo: string): Effect<never, never, never>
+      2. Define service interface (no implementation yet)
+      3. Document that startPolling runs indefinitely (Effect<never>)
+      4. Add test stub
+
+      **Constraints:**
+      - Follow Effect.Service pattern
+      - Document return type (never succeeds, runs forever)
+
+      **TDD Checklist:**
+      - [ ] Write test stub (implementation in next task)
+      - [ ] Verify interface compiles
+
+      **Validation:**
+      ```bash
+      pnpm run typecheck
+      ```
+      Expected: Interface compiles successfully
+
+      **Drift Policy:**
+      N/A
+
+    validation:
+      commands:
+        - pnpm run typecheck
+      expected_output: "No type errors"
+      on_failure: "Review service interface definition"
+
+  - id: m1-006
+    name: Implement PollingService with Effect.repeat
+    description: |
+      Implement PollingService that polls GitHub for unclaimed PRs using
+      Effect.repeat with Schedule.spaced for 5-minute intervals.
+    estimate_minutes: 90
+    type: code
+    dependencies: [m1-005]
+    files:
+      create: []
+      modify:
+        - src/services/polling.ts
+        - tests/services/polling.test.ts
+      touch_only:
+        - src/services/github.ts
+        - src/services/config.ts
+    instructions: |
+      **Objective:**
+      Implement polling loop using Effect.repeat with configurable interval.
+
+      **Implementation Steps:**
+      1. Implement PollingServiceLive:
+         - Depend on GitHubService and ConfigService
+         - In startPolling:
+           a. Get config to read pollingIntervalMinutes and claimLabel
+           b. Define pollOnce effect that:
+              - Calls GitHubService.listOpenPRs
+              - Filters PRs without claimLabel
+              - Returns first unclaimed PR or None
+           c. Use Effect.repeat(pollOnce, Schedule.spaced(duration))
+           d. Log each poll cycle
+      2. Add unit tests with mocked GitHubService
+
+      **Constraints:**
+      - ONLY use Effect.repeat with Schedule.spaced for polling
+      - NO setTimeout or setInterval
+      - Follow pattern in style anchor: ~/Sites/ai-use-repos/EffectPatterns/retry-schedule-pattern.ts
+      - Use Effect.provide to inject dependencies
+
+      **TDD Checklist:**
+      - [ ] Write test for pollOnce (mock GitHubService)
+      - [ ] Write test for filtering unclaimed PRs
+      - [ ] Write test for repeat schedule (verify interval)
+      - [ ] Implement PollingService to pass tests
+      - [ ] Verify logging occurs on each cycle
+
+      **Validation:**
+      ```bash
+      pnpm test tests/services/polling.test.ts
+      ```
+      Expected: All PollingService tests pass
+
+      **Drift Policy:**
+      If Schedule.spaced is not available, verify Effect version.
+      Do not implement custom polling loop.
+
+    validation:
+      commands:
+        - pnpm test tests/services/polling.test.ts
+        - pnpm run typecheck
+      expected_output: "Tests pass and types check"
+      on_failure: "Review Effect.repeat and Schedule usage"
