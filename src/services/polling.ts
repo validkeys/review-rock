@@ -42,11 +42,9 @@ export const PollingService = Context.GenericTag<PollingService>("@services/Poll
  * @param config - Preloaded configuration
  * @returns Layer that provides PollingService
  */
-export const makePollingServiceLayer = (config: Config): Layer.Layer<
-  PollingService,
-  never,
-  GitHubService | ClassificationService | ReviewService
-> =>
+export const makePollingServiceLayer = (
+  config: Config
+): Layer.Layer<PollingService, never, GitHubService | ClassificationService | ReviewService> =>
   Layer.effect(
     PollingService,
     Effect.gen(function* () {
@@ -60,57 +58,55 @@ export const makePollingServiceLayer = (config: Config): Layer.Layer<
             // Use preloaded configuration
             const { pollingIntervalMinutes, labels } = config;
 
-          // Define the poll-once effect
-          const pollOnce = Effect.gen(function* () {
-            yield* Effect.logInfo(
-              `Polling ${repo} for PRs with label: ${labels.readyForReview}`
-            );
+            // Define the poll-once effect
+            const pollOnce = Effect.gen(function* () {
+              yield* Effect.logInfo(`Polling ${repo} for PRs with label: ${labels.readyForReview}`);
 
-            // Get all open PRs
-            const prs = yield* github.listOpenPRs(repo);
+              // Get all open PRs
+              const prs = yield* github.listOpenPRs(repo);
 
-            // Filter to only PRs that have the readyForReview label
-            const readyPRs = prs.filter((pr) => pr.labels.includes(labels.readyForReview));
+              // Filter to only PRs that have the readyForReview label
+              const readyPRs = prs.filter((pr) => pr.labels.includes(labels.readyForReview));
 
-            yield* Effect.logInfo(
-              `Found ${readyPRs.length} ready PRs out of ${prs.length} total`
-            );
-
-            // Process each ready PR through the workflow
-            for (const pr of readyPRs) {
-              yield* Effect.logInfo(`Processing PR #${pr.number}: ${pr.title}`).pipe(
-                Effect.annotateLogs("pr", pr.number)
+              yield* Effect.logInfo(
+                `Found ${readyPRs.length} ready PRs out of ${prs.length} total`
               );
 
-              // Process PR with workflow - catch errors to prevent polling from stopping
-              yield* processPR(repo, pr.number, config).pipe(
-                Effect.provideService(GitHubService, github),
-                Effect.provideService(ClassificationService, classification),
-                Effect.provideService(ReviewService, review),
-                Effect.tap((reviewContent) =>
-                  Effect.logInfo(
-                    `Successfully reviewed, review length: ${reviewContent.length} chars`
-                  ).pipe(Effect.annotateLogs("pr", pr.number))
-                ),
-                Effect.catchAll((error) =>
-                  Effect.logError(`Failed to process: ${String(error)}`).pipe(
-                    Effect.annotateLogs("pr", pr.number),
-                    Effect.as(undefined)
+              // Process each ready PR through the workflow
+              for (const pr of readyPRs) {
+                yield* Effect.logInfo(`Processing PR #${pr.number}: ${pr.title}`).pipe(
+                  Effect.annotateLogs("pr", pr.number)
+                );
+
+                // Process PR with workflow - catch errors to prevent polling from stopping
+                yield* processPR(repo, pr.number, config).pipe(
+                  Effect.provideService(GitHubService, github),
+                  Effect.provideService(ClassificationService, classification),
+                  Effect.provideService(ReviewService, review),
+                  Effect.tap((reviewContent) =>
+                    Effect.logInfo(
+                      `Successfully reviewed, review length: ${reviewContent.length} chars`
+                    ).pipe(Effect.annotateLogs("pr", pr.number))
+                  ),
+                  Effect.catchAll((error) =>
+                    Effect.logError(`Failed to process: ${String(error)}`).pipe(
+                      Effect.annotateLogs("pr", pr.number),
+                      Effect.as(undefined)
+                    )
                   )
-                )
-              );
-            }
-          }).pipe(Effect.orDie);
+                );
+              }
+            }).pipe(Effect.orDie);
 
-          // Create schedule with configured interval
-          const schedule = Schedule.spaced(Duration.minutes(pollingIntervalMinutes));
+            // Create schedule with configured interval
+            const schedule = Schedule.spaced(Duration.minutes(pollingIntervalMinutes));
 
-          // Repeat pollOnce indefinitely with the schedule
-          yield* Effect.repeat(pollOnce, schedule);
+            // Repeat pollOnce indefinitely with the schedule
+            yield* Effect.repeat(pollOnce, schedule);
 
-          // This line is never reached (Effect<never>)
-          return yield* Effect.never;
-        }).pipe(Effect.orDie),
-    });
-  })
-);
+            // This line is never reached (Effect<never>)
+            return yield* Effect.never;
+          }).pipe(Effect.orDie),
+      });
+    })
+  );

@@ -1,10 +1,10 @@
-import { Effect, Layer } from "effect";
+import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 import type { Config } from "../../src/config/schema.js";
 import {
   ClassificationService,
-  makeClassificationServiceLayer,
   isFrontendPath,
+  makeClassificationServiceLayer,
 } from "../../src/services/classification.js";
 
 describe("ClassificationService", () => {

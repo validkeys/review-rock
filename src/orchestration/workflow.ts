@@ -1,19 +1,19 @@
-import { Effect, Schedule, Duration } from "effect";
+import { Duration, Effect, Schedule } from "effect";
 import type { Config } from "../config/schema.js";
 import type {
   GitHubCommandError,
   LabelClaimFailedError,
   PRNotFoundError,
 } from "../errors/github.js";
-import { ClassificationService } from "../services/classification.js";
-import { GitHubService } from "../services/github.js";
-import type { ReviewError } from "../services/review.js";
-import { ReviewService } from "../services/review.js";
 import {
   AWSTokenExpiredError,
   ClaudeCodeCommandError,
   SkillNotFoundError,
 } from "../errors/review.js";
+import { ClassificationService } from "../services/classification.js";
+import { GitHubService } from "../services/github.js";
+import type { ReviewError } from "../services/review.js";
+import { ReviewService } from "../services/review.js";
 
 /**
  * Union type of all possible workflow errors
@@ -175,7 +175,7 @@ export const processPR = (
       Schedule.compose(Schedule.recurs(5))
     );
 
-    yield* logWithPR(Effect.logInfo(`Starting review - swapping labels`));
+    yield* logWithPR(Effect.logInfo("Starting review - swapping labels"));
     yield* github.removeLabel(repo, prNumber, config.labels.readyForReview).pipe(
       Effect.retry({
         schedule: networkRetrySchedule,
@@ -192,7 +192,7 @@ export const processPR = (
 
     // Step 2: Post initial "analyzing..." comment
     // Retry on network failures
-    yield* logWithPR(Effect.logInfo(`Posting initial comment`));
+    yield* logWithPR(Effect.logInfo("Posting initial comment"));
     const commentId = yield* github
       .postCommentWithId(
         repo,
@@ -252,7 +252,7 @@ export const processPR = (
                 // Log that we're retrying due to transient error
                 if (error instanceof AWSTokenExpiredError) {
                   Effect.logWarning(
-                    `AWS token expired. Waiting for token refresh... (will retry automatically)`
+                    "AWS token expired. Waiting for token refresh... (will retry automatically)"
                   )
                     .pipe(Effect.annotateLogs("pr", prNumber))
                     .pipe(Effect.runSync);
@@ -268,7 +268,7 @@ export const processPR = (
         );
 
       // Step 7: Determine the appropriate label based on review content
-      yield* logWithPR(Effect.logInfo(`Determining review outcome label`));
+      yield* logWithPR(Effect.logInfo("Determining review outcome label"));
       const labelDecision = determineReviewLabel(reviewContent);
       const finalLabel =
         labelDecision === "approved"
@@ -303,7 +303,7 @@ export const processPR = (
           while: isTransientError,
         })
       );
-      yield* logWithPR(Effect.logInfo(`Review complete`));
+      yield* logWithPR(Effect.logInfo("Review complete"));
 
       return reviewContent;
     }).pipe(
@@ -315,35 +315,37 @@ export const processPR = (
           const errorType = isTransient ? "transient error (retries exhausted)" : "permanent error";
 
           yield* logWithPR(Effect.logError(`${errorType}: ${String(error)}`));
-          yield* logWithPR(Effect.logInfo(`Updating comment with error message`));
+          yield* logWithPR(Effect.logInfo("Updating comment with error message"));
 
           // Provide helpful error message based on error type
-          let errorMessage = `❌ **review-rock encountered an error**\n\n`;
+          let errorMessage = "❌ **review-rock encountered an error**\n\n";
 
           if (error instanceof AWSTokenExpiredError) {
-            errorMessage += `**Token Expired**: AWS SSO token has expired and was not refreshed within the retry period.\n\n`;
-            errorMessage += `**Action Required**: Run \`aws sso login\` to refresh your token.\n\n`;
+            errorMessage +=
+              "**Token Expired**: AWS SSO token has expired and was not refreshed within the retry period.\n\n";
+            errorMessage += "**Action Required**: Run `aws sso login` to refresh your token.\n\n";
           } else if (isTransient) {
             errorMessage += `**Transient Error**: ${String(error)}\n\n`;
-            errorMessage += `This error persisted after multiple retries. It may resolve on its own.\n\n`;
+            errorMessage +=
+              "This error persisted after multiple retries. It may resolve on its own.\n\n";
           } else {
             errorMessage += `**Error**: ${String(error)}\n\n`;
           }
 
           errorMessage += `The PR label has been reset to "${config.labels.readyForReview}" and will be retried automatically on the next poll.`;
 
-          yield* github.updateComment(repo, commentId, errorMessage).pipe(
-            Effect.catchAll(() => Effect.void)
-          );
+          yield* github
+            .updateComment(repo, commentId, errorMessage)
+            .pipe(Effect.catchAll(() => Effect.void));
 
           // Reset labels: remove reviewInProgress, re-add readyForReview
-          yield* logWithPR(Effect.logInfo(`Resetting labels after error`));
-          yield* github.removeLabel(repo, prNumber, config.labels.reviewInProgress).pipe(
-            Effect.catchAll(() => Effect.void)
-          );
-          yield* github.addLabel(repo, prNumber, config.labels.readyForReview).pipe(
-            Effect.catchAll(() => Effect.void)
-          );
+          yield* logWithPR(Effect.logInfo("Resetting labels after error"));
+          yield* github
+            .removeLabel(repo, prNumber, config.labels.reviewInProgress)
+            .pipe(Effect.catchAll(() => Effect.void));
+          yield* github
+            .addLabel(repo, prNumber, config.labels.readyForReview)
+            .pipe(Effect.catchAll(() => Effect.void));
 
           // Re-throw the original error
           return yield* Effect.fail(error);

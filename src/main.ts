@@ -1,15 +1,15 @@
 #!/usr/bin/env node
+import { exec } from "node:child_process";
+import { promisify } from "node:util";
 import { Command } from "@effect/cli";
 import { NodeContext, NodeRuntime } from "@effect/platform-node";
-import { Effect, Layer, Logger, LogLevel } from "effect";
+import { Effect, Layer, LogLevel, Logger } from "effect";
 import { reviewRockCommand } from "./cli/command.js";
 import { makeClassificationServiceLayer } from "./services/classification.js";
 import { loadConfig, makeRepositoryServiceLayer } from "./services/config.js";
 import { GitHubServiceDefault } from "./services/github.js";
 import { makePollingServiceLayer } from "./services/polling.js";
 import { ReviewServiceLive } from "./services/review.js";
-import { exec } from "child_process";
-import { promisify } from "util";
 
 const execAsync = promisify(exec);
 
@@ -41,9 +41,7 @@ const createLabel = (
           yield* Effect.logDebug(`Label '${label}' already exists`);
         } else {
           // Log warning but don't fail startup
-          yield* Effect.logWarning(
-            `Failed to create label '${label}': ${error.message}`
-          );
+          yield* Effect.logWarning(`Failed to create label '${label}': ${error.message}`);
           return yield* Effect.fail(error);
         }
       })
@@ -69,12 +67,7 @@ const ensureLabelsExist = (
     yield* Effect.all(
       [
         createLabel(repo, labels.readyForReview, "0E8A16", "PR is ready for automated review"),
-        createLabel(
-          repo,
-          labels.reviewInProgress,
-          "FBCA04",
-          "Review is currently in progress"
-        ),
+        createLabel(repo, labels.reviewInProgress, "FBCA04", "Review is currently in progress"),
         createLabel(
           repo,
           labels.reviewRefactorRequired,
@@ -86,7 +79,7 @@ const ensureLabelsExist = (
       { concurrency: "unbounded" }
     );
 
-    yield* Effect.logInfo(`✓ All workflow labels are ready`);
+    yield* Effect.logInfo("✓ All workflow labels are ready");
   });
 
 /**
@@ -144,10 +137,9 @@ const main = Effect.gen(function* () {
 /**
  * Pretty logger layer for colorized console output with minimum level Info
  */
-const PrettyLoggerLayer = Logger.replace(
-  Logger.defaultLogger,
-  Logger.logfmtLogger
-).pipe(Layer.merge(Logger.minimumLogLevel(LogLevel.Info)));
+const PrettyLoggerLayer = Logger.replace(Logger.defaultLogger, Logger.logfmtLogger).pipe(
+  Layer.merge(Logger.minimumLogLevel(LogLevel.Info))
+);
 
 // Start the program with pretty logging
 NodeRuntime.runMain(

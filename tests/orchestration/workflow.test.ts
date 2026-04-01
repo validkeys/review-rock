@@ -1,7 +1,6 @@
 import { Effect, Layer } from "effect";
 import { describe, expect, it } from "vitest";
 import type { Config } from "../../src/config/schema.js";
-import { LabelClaimFailedError } from "../../src/errors/github.js";
 import { ReviewGenerationError } from "../../src/errors/review.js";
 import { processPR } from "../../src/orchestration/workflow.js";
 import { ClassificationService } from "../../src/services/classification.js";

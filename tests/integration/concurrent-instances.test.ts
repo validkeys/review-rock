@@ -141,7 +141,7 @@ describe("Concurrent Instance Coordination", () => {
       Effect.gen(function* () {
         const repo = "owner/repo";
         const prNumber = 456;
-        const label = "review-rock-claimed";
+        const _label = "review-rock-claimed";
 
         // Atomic counter to track successful claims
         const successfulClaims = yield* Ref.make(0);
@@ -242,7 +242,7 @@ describe("Concurrent Instance Coordination", () => {
       Effect.gen(function* () {
         const repo = "owner/repo";
         const prNumber = 789;
-        const label = "review-rock-claimed";
+        const _label = "review-rock-claimed";
 
         let labelClaimed = false;
         let labelRemoved = false;
@@ -297,7 +297,7 @@ describe("Concurrent Instance Coordination", () => {
       Effect.gen(function* () {
         const repo = "owner/repo";
         const prNumber = 999;
-        const label = "review-rock-claimed";
+        const _label = "review-rock-claimed";
 
         const claimAttempts = yield* Ref.make(0);
         const labelRemoved = yield* Ref.make(false);
@@ -380,7 +380,7 @@ describe("Concurrent Instance Coordination", () => {
       Effect.gen(function* () {
         const repo = "owner/repo";
         const prNumber = 111;
-        const label = "review-rock-claimed";
+        const _label = "review-rock-claimed";
 
         let labelClaimed = false;
         let labelRemoved = false;
@@ -434,7 +434,7 @@ describe("Concurrent Instance Coordination", () => {
       Effect.gen(function* () {
         const repo = "owner/repo";
         const prNumber = 222;
-        const label = "review-rock-claimed";
+        const _label = "review-rock-claimed";
 
         let removeLabelCalled = false;
 
@@ -489,7 +489,7 @@ describe("Concurrent Instance Coordination", () => {
       Effect.gen(function* () {
         const repo = "owner/repo";
         const prNumber = 333;
-        const label = "review-rock-claimed";
+        const _label = "review-rock-claimed";
 
         let labelClaimed = false;
 

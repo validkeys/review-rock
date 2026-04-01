@@ -479,14 +479,7 @@ const executeGetPRDiffCommand = (
 ): Effect.Effect<string, GitHubCommandError, CommandExecutor.CommandExecutor> =>
   Effect.gen(function* () {
     // Execute gh pr diff command
-    const command = Command.make(
-      "gh",
-      "pr",
-      "diff",
-      String(prNumber),
-      "--repo",
-      repo
-    );
+    const command = Command.make("gh", "pr", "diff", String(prNumber), "--repo", repo);
 
     // Run command and get output
     const diff = yield* Command.string(command).pipe(

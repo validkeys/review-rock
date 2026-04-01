@@ -46,7 +46,9 @@ export const ClassificationService = Context.GenericTag<ClassificationService>(
  * @param config - Preloaded configuration
  * @returns Layer that provides ClassificationService
  */
-export const makeClassificationServiceLayer = (config: Config): Layer.Layer<ClassificationService> =>
+export const makeClassificationServiceLayer = (
+  config: Config
+): Layer.Layer<ClassificationService> =>
   Layer.succeed(
     ClassificationService,
     ClassificationService.of({

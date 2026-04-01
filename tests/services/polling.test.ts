@@ -1,12 +1,14 @@
 import { describe, it } from "vitest";
-import type { ClassificationResult } from "../../src/types/pr-classification.js";
 import type { Config } from "../../src/config/schema.js";
+import type { ClassificationResult } from "../../src/types/pr-classification.js";
 
 describe("PollingService", () => {
   describe("startPolling", () => {
     it("should filter out PRs with claim label", async ({ expect }) => {
       const { Effect, Layer } = await import("effect");
-      const { PollingService, makePollingServiceLayer } = await import("../../src/services/polling.js");
+      const { PollingService, makePollingServiceLayer } = await import(
+        "../../src/services/polling.js"
+      );
       const { GitHubService } = await import("../../src/services/github.js");
       const { ClassificationService } = await import("../../src/services/classification.js");
       const { ReviewService } = await import("../../src/services/review.js");
@@ -60,7 +62,7 @@ describe("PollingService", () => {
       );
 
       // Create test config
-      const testConfig: Config = {
+      const _testConfig: Config = {
         repository: "owner/repo",
         pollingIntervalMinutes: 5,
         labels: {
@@ -128,7 +130,9 @@ describe("PollingService", () => {
 
     it("should use ConfigService for polling interval and claim label", async ({ expect }) => {
       const { Effect, Layer } = await import("effect");
-      const { PollingService, makePollingServiceLayer } = await import("../../src/services/polling.js");
+      const { PollingService, makePollingServiceLayer } = await import(
+        "../../src/services/polling.js"
+      );
       const { GitHubService } = await import("../../src/services/github.js");
       const { ConfigService } = await import("../../src/services/config.js");
       const { ClassificationService } = await import("../../src/services/classification.js");
@@ -166,7 +170,7 @@ describe("PollingService", () => {
       );
 
       // Mock ConfigService that tracks calls
-      const mockConfigService = Layer.succeed(
+      const _mockConfigService = Layer.succeed(
         ConfigService,
         ConfigService.of({
           getConfig: Effect.sync(() => {
@@ -237,7 +241,9 @@ describe("PollingService", () => {
       const { ConfigService } = await import("../../src/services/config.js");
       const { ClassificationService } = await import("../../src/services/classification.js");
       const { ReviewService } = await import("../../src/services/review.js");
-      const { PollingService, makePollingServiceLayer } = await import("../../src/services/polling.js");
+      const { PollingService, makePollingServiceLayer } = await import(
+        "../../src/services/polling.js"
+      );
 
       const mockGitHubService = Layer.succeed(
         GitHubService,
@@ -279,7 +285,7 @@ describe("PollingService", () => {
         })
       );
 
-      const mockConfigService = Layer.succeed(
+      const _mockConfigService = Layer.succeed(
         ConfigService,
         ConfigService.of({
           getConfig: Effect.succeed({
@@ -345,7 +351,9 @@ describe("PollingService", () => {
 
     it("should process unclaimed PRs through workflow", async ({ expect }) => {
       const { Effect, Layer } = await import("effect");
-      const { PollingService, makePollingServiceLayer } = await import("../../src/services/polling.js");
+      const { PollingService, makePollingServiceLayer } = await import(
+        "../../src/services/polling.js"
+      );
       const { GitHubService } = await import("../../src/services/github.js");
       const { ConfigService } = await import("../../src/services/config.js");
       const { ClassificationService } = await import("../../src/services/classification.js");
@@ -398,7 +406,7 @@ describe("PollingService", () => {
       );
 
       // Mock ConfigService
-      const mockConfigService = Layer.succeed(
+      const _mockConfigService = Layer.succeed(
         ConfigService,
         ConfigService.of({
           getConfig: Effect.succeed({
@@ -468,7 +476,9 @@ describe("PollingService", () => {
 
     it("should continue polling if workflow fails for one PR", async ({ expect }) => {
       const { Effect, Layer } = await import("effect");
-      const { PollingService, makePollingServiceLayer } = await import("../../src/services/polling.js");
+      const { PollingService, makePollingServiceLayer } = await import(
+        "../../src/services/polling.js"
+      );
       const { GitHubService } = await import("../../src/services/github.js");
       const { ConfigService } = await import("../../src/services/config.js");
       const { ClassificationService } = await import("../../src/services/classification.js");
@@ -497,7 +507,7 @@ describe("PollingService", () => {
       );
 
       // Create test config
-      const testConfig: Config = {
+      const _testConfig: Config = {
         repository: "owner/repo",
         pollingIntervalMinutes: 5,
         labels: {

@@ -1,8 +1,8 @@
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { pathToFileURL } from "node:url";
 import { Schema } from "@effect/schema";
 import { Context, Effect, Layer } from "effect";
-import * as path from "node:path";
-import * as fs from "node:fs";
-import { pathToFileURL } from "node:url";
 import type { Config } from "../config/schema.js";
 import { ConfigSchema } from "../config/schema.js";
 
@@ -41,7 +41,9 @@ export interface RepositoryService {
   readonly getRepository: Effect.Effect<string>;
 }
 
-export const RepositoryService = Context.GenericTag<RepositoryService>("@services/RepositoryService");
+export const RepositoryService = Context.GenericTag<RepositoryService>(
+  "@services/RepositoryService"
+);
 
 /**
  * Create RepositoryService layer from config
@@ -63,9 +65,7 @@ export const loadConfig = async (): Promise<Config> => {
   // Check if file exists
   if (!fs.existsSync(configPath)) {
     throw new Error(
-      `Configuration file not found: ${configPath}\n\n` +
-        `Please create a review-rock.config.ts file in the current directory.\n` +
-        `You can copy the example from: node_modules/review-rock/review-rock.config.example.ts`
+      `Configuration file not found: ${configPath}\n\nPlease create a review-rock.config.ts file in the current directory.\nYou can copy the example from: node_modules/review-rock/review-rock.config.example.ts`
     );
   }
 

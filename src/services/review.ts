@@ -263,7 +263,7 @@ const executeGenerateReviewCommand = (
     );
 
     // Save to file for debugging
-    const fs = yield* Effect.promise(() => import("fs/promises"));
+    const fs = yield* Effect.promise(() => import("node:fs/promises"));
     const logPath = `/tmp/review-rock-debug-${prContext.prNumber}.md`;
     yield* Effect.promise(() =>
       fs.writeFile(
