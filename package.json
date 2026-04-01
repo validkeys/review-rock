@@ -1,6 +1,6 @@
 {
   "name": "review-rock",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Automated PR review using Claude AI via AWS Bedrock with distributed coordination",
   "type": "module",
   "main": "dist/index.js",

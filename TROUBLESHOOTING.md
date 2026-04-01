@@ -16,6 +16,7 @@ This guide covers common issues you might encounter when running Review Rock and
 - [Command Not Found: claude](#command-not-found-claude)
 - [Permission Denied on GitHub](#permission-denied-on-github)
 - [Configuration Validation Errors](#configuration-validation-errors)
+- [Teams Notifications](#teams-notifications)
 
 ---
 
@@ -669,6 +670,227 @@ review-rock
 ```
 
 If the configuration is valid, Review Rock will start polling.
+
+---
+
+## Teams Notifications
+
+### Overview
+
+Review Rock can send review notifications to Microsoft Teams channels via incoming webhooks. When enabled, Teams receives an adaptive card notification whenever a PR review is completed, with color-coded styling based on the review verdict.
+
+### Setting Up Teams Webhook
+
+**Step 1: Create Incoming Webhook in Teams**
+
+1. Open Microsoft Teams and navigate to the channel where you want notifications
+2. Click the `...` menu next to the channel name
+3. Select **Connectors** (or **Workflows** in newer Teams)
+4. Search for "Incoming Webhook"
+5. Click **Configure** or **Add**
+6. Give your webhook a name (e.g., "Review Rock Notifications")
+7. Optionally upload an icon
+8. Click **Create**
+9. **Copy the webhook URL** - it will look like:
+   ```
+   https://outlook.office.com/webhook/[guid]@[guid]/IncomingWebhook/[guid]/[guid]
+   ```
+10. Click **Done**
+
+**Step 2: Configure Review Rock**
+
+Add the webhook URL to your `review-rock.config.ts`:
+
+```typescript
+export default {
+  // ... other config
+
+  // Enable Teams notifications
+  enableTeamsNotifications: true,
+
+  // Add your webhook URL
+  teamsWebhookUrl: "https://outlook.office.com/webhook/...",
+} satisfies Config;
+```
+
+**Step 3: Test the Integration**
+
+1. Add the `ready-for-review` label to a PR
+2. Wait for Review Rock to process it
+3. Check your Teams channel for the notification
+
+### Notification Format
+
+Review Rock sends adaptive card notifications with the following information:
+
+**Card Structure:**
+- **Header**: Color-coded title with verdict emoji
+  - 🟢 Green: "PR Review - Approved ✅"
+  - 🔴 Red: "PR Review - Changes Required ❌"
+  - 🔵 Blue: "PR Review - Comments Posted 💬"
+
+- **Details Section**:
+  - PR number and title
+  - PR author
+  - Repository name
+  - Timestamp
+
+- **Action Buttons**:
+  - "View PR" - Opens the pull request
+  - "View Review" - Opens the review comment
+
+**Verdict Styling:**
+- **Approve** (`approve`): Green color ("Good")
+- **Request Changes** (`request-changes`): Red/orange color ("Attention")
+- **Comment** (`comment`): Blue color ("Accent")
+
+The verdict is automatically extracted from the review content based on keywords like "Approve ✅", "Request Changes ❌", or critical issue indicators (🔴).
+
+### Troubleshooting Teams Notifications
+
+#### Notifications Not Appearing
+
+**Check 1: Verify configuration**
+```typescript
+// Both settings must be enabled
+enableTeamsNotifications: true,
+teamsWebhookUrl: "https://outlook.office.com/webhook/...",
+```
+
+**Check 2: Check logs**
+Look for Teams notification logs:
+```
+level=INFO message="Sending Teams notification" pr=123
+level=INFO message="✓ Teams notification sent for PR #123"
+```
+
+If you see warnings:
+```
+level=WARN message="Teams notifications disabled or webhook URL not configured"
+```
+This means `enableTeamsNotifications` is false or `teamsWebhookUrl` is not set.
+
+**Check 3: Test webhook manually**
+Test the webhook URL with curl:
+```bash
+curl -X POST "https://outlook.office.com/webhook/..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "message",
+    "attachments": [{
+      "contentType": "application/vnd.microsoft.card.adaptive",
+      "content": {
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "type": "AdaptiveCard",
+        "version": "1.4",
+        "body": [{
+          "type": "TextBlock",
+          "text": "Test notification",
+          "size": "Large"
+        }]
+      }
+    }]
+  }'
+```
+
+If this fails, your webhook URL is invalid or the webhook was deleted.
+
+#### Webhook Returns Error
+
+**Symptom:**
+```
+level=WARN message="Teams notification failed (non-critical): Teams webhook returned error: 400 Bad Request"
+```
+
+**Causes:**
+1. **Webhook deleted**: The webhook was removed from Teams
+2. **Invalid URL**: The URL is malformed or incomplete
+3. **Connector disabled**: The connector was disabled in Teams
+
+**Solution:**
+1. Recreate the webhook in Teams (follow setup steps above)
+2. Update `teamsWebhookUrl` in your configuration
+3. Restart Review Rock
+
+#### Notifications Delayed
+
+**Note:** Teams notifications are sent **after** the review is posted to GitHub and labels are updated. If the review process takes a long time, the notification will be delayed accordingly.
+
+**Check:**
+- Ensure the review is completing successfully (check GitHub for the review comment)
+- Look for logs indicating the notification was sent
+- Teams may have its own delivery delays (usually < 1 second)
+
+#### Review Completes But No Notification
+
+**Cause:** Teams notification errors are non-critical and don't stop the review workflow.
+
+**Check logs for:**
+```
+level=WARN message="Teams notification failed (non-critical): Network timeout"
+```
+
+**Common reasons:**
+- Network connectivity issues
+- Teams service outage
+- Webhook URL expired or changed
+
+**Solution:**
+The review is still posted to GitHub successfully. To fix future notifications:
+1. Verify webhook URL is still valid
+2. Check network connectivity
+3. Review Teams service status
+
+#### Duplicate Notifications
+
+**Cause:** Running multiple Review Rock instances with the same configuration, or a PR being processed twice.
+
+**Solution:**
+- Ensure only one Review Rock instance is running per repository
+- Check logs for duplicate PR processing
+
+### Configuration Examples
+
+**Minimal setup (disabled):**
+```typescript
+export default {
+  // Teams notifications off by default
+  enableTeamsNotifications: false,
+} satisfies Config;
+```
+
+**Enabled with webhook:**
+```typescript
+export default {
+  enableTeamsNotifications: true,
+  teamsWebhookUrl: "https://outlook.office.com/webhook/abc-123-def-456/IncomingWebhook/xyz-789/uvw-012",
+} satisfies Config;
+```
+
+**Development setup (disabled for testing):**
+```typescript
+export default {
+  // Keep webhook URL but disable notifications during development
+  enableTeamsNotifications: false,
+  teamsWebhookUrl: "https://outlook.office.com/webhook/...",
+} satisfies Config;
+```
+
+### Security Notes
+
+**Webhook URL Security:**
+- Keep your webhook URL secret - anyone with the URL can post to your Teams channel
+- Don't commit the webhook URL to public repositories
+- Consider using environment variables:
+  ```typescript
+  teamsWebhookUrl: process.env.TEAMS_WEBHOOK_URL,
+  ```
+- Rotate the webhook URL periodically by creating a new webhook in Teams
+
+**Notification Content:**
+- Notifications include PR titles, author names, and repository information
+- Review content is NOT included in the notification (only the verdict)
+- Links point to public GitHub URLs (ensure your repository's visibility matches your security requirements)
 
 ---
 
