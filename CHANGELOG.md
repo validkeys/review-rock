@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0
+
+### Minor Changes
+
+- Refactored the resilience
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
@@ -44,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Technical Details
 
 **Core Services:**
+
 - `GitHubService`: PR listing, label management, comment posting
 - `ReviewService`: Claude review orchestration via claudecode
 - `ClassificationService`: PR type detection based on file paths
@@ -52,6 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `WorkflowService`: End-to-end PR review workflow
 
 **Error Handling:**
+
 - AWS SSO token expiration detection
 - Skill not found error detection
 - GitHub API rate limit handling
@@ -59,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Graceful degradation for network failures
 
 **Testing:**
+
 - Unit tests for all core services
 - Integration tests with GitHub CLI
 - Error scenario tests
@@ -78,6 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Dependencies
 
 **Runtime:**
+
 - `effect` ^3.10.0 - Functional effect system
 - `@effect/cli` ^0.47.0 - CLI framework
 - `@effect/platform` ^0.68.0 - Platform abstractions
@@ -85,6 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `@effect/schema` ^0.75.0 - Schema validation
 
 **Development:**
+
 - `typescript` ^5.6.0
 - `vitest` ^2.1.9 - Test framework
 - `@vitest/coverage-v8` ^2.1.9 - Coverage reporting
@@ -93,6 +104,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tsx` ^4.19.0 - TypeScript execution
 
 **External Tools:**
+
 - GitHub CLI (`gh`) - Required for GitHub API operations
 - Claude Code CLI (`claudecode`) - Required for Claude AI reviews
 - AWS CLI (optional) - For AWS SSO authentication
@@ -112,6 +124,7 @@ Not applicable - this is the initial release.
 ### Added
 
 **Label-Based Workflow:**
+
 - Label-based state machine for PR review lifecycle
 - Four workflow labels: `ready-for-review`, `review-in-progress`, `review-refactor-required`, `review-approved`
 - Automatic label creation on startup with appropriate colors and descriptions
@@ -119,6 +132,7 @@ Not applicable - this is the initial release.
 - Only PRs with `ready-for-review` label are queued for review
 
 **Automatic Retry & Resilience:**
+
 - Intelligent retry logic for transient failures (network issues, token expiry, rate limits)
 - Network operations: 5 retries with exponential backoff (5s → 10s → 20s → 40s → 80s)
 - Review generation: 10 retries with exponential backoff (10s → 20s → 40s → 80s → 160s...)
@@ -128,12 +142,14 @@ Not applicable - this is the initial release.
 - Only resets to `ready-for-review` after all retries exhausted
 
 **Enhanced Review Experience:**
+
 - Initial "🤖 analyzing..." comment posted immediately when PR is claimed
 - Same comment updated with full review when complete (no multiple comments)
 - Automated outcome determination from review content (approved vs refactor-required)
 - Final label automatically applied based on review analysis
 
 **Improved Logging:**
+
 - Migrated to Effect's structured logging system with pretty formatting
 - PR number annotations on all workflow logs for traceability
 - Log levels: INFO, WARN, ERROR, DEBUG with color-coded output
@@ -141,6 +157,7 @@ Not applicable - this is the initial release.
 - Transient vs permanent error distinction in logs
 
 **Claude Integration:**
+
 - Uses Claude's built-in `/review` command instead of passing full diffs
 - Claude fetches PR diff directly via GitHub CLI (reduces data transfer)
 - Skill-specific guidance provided based on PR classification
@@ -149,9 +166,11 @@ Not applicable - this is the initial release.
 ### Changed
 
 **Breaking Changes:**
+
 - Configuration schema updated: `claimLabel` replaced with `labels` object
 - Now uses `claude` CLI instead of `claudecode` CLI
 - Configuration must be updated to use new labels structure:
+
   ```typescript
   // Old
   claimLabel: "review-rock-claimed"
@@ -166,12 +185,14 @@ Not applicable - this is the initial release.
   ```
 
 **Workflow Changes:**
+
 - Reviews now triggered by `ready-for-review` label instead of absence of claim label
 - Labels swapped atomically (remove ready → add in-progress) instead of just adding claim label
 - Comment posting strategy changed to update single comment instead of posting new ones
 - Review generation now uses `/review` command with skill guidance instead of direct skill execution
 
 **Performance Improvements:**
+
 - Parallel label creation on startup (all 4 labels created concurrently)
 - Reduced diff data transfer (Claude fetches diffs itself)
 - More efficient GitHub API usage with targeted operations
@@ -199,23 +220,27 @@ Not applicable - this is the initial release.
 ### Technical Details
 
 **Architecture Changes:**
+
 - Label-based state machine replaces claim label pattern
 - Retry schedules implemented with Effect Schedule combinators
 - Transient error detection with pattern matching
 - Single comment ID tracked throughout workflow for updates
 
 **Error Classification:**
+
 - Transient errors: Network failures, token expiry, rate limits, timeouts
 - Permanent errors: Skill not found, invalid config, permission denied
 - Automatic retry only for transient errors
 
 **Review Generation:**
+
 - Command: `claude --bare --allowed-tools Bash(gh:*)`
 - Input: `/review <pr-number>` with skill guidance and format requirements
 - Skill guidance varies by classification (frontend/backend/mixed)
 - Review text analyzed for outcome (critical issues, explicit verdicts)
 
 **Label Colors:**
+
 - `ready-for-review`: Green (#0E8A16)
 - `review-in-progress`: Yellow (#FBCA04)
 - `review-refactor-required`: Red (#D93F0B)
@@ -253,6 +278,7 @@ const config: Config = {
 **2. Install Claude CLI:**
 
 Replace `claudecode` with `claude`:
+
 ```bash
 # Install claude from https://claude.ai/download
 # Authenticate on first run
@@ -262,6 +288,7 @@ claude
 **3. Add Labels to PRs:**
 
 PRs now require the `ready-for-review` label to be queued:
+
 ```bash
 gh pr edit <pr-number> --add-label "ready-for-review"
 ```
@@ -269,6 +296,7 @@ gh pr edit <pr-number> --add-label "ready-for-review"
 **4. Remove Old Labels:**
 
 Remove old claim labels if they exist:
+
 ```bash
 gh label delete "review-rock-claimed" --repo owner/repo
 ```
@@ -289,9 +317,11 @@ Labels will be auto-created on next startup.
 ### Dependencies
 
 **Changed:**
+
 - Now requires `claude` CLI instead of `claudecode` CLI
 
 **Runtime:** (unchanged)
+
 - `effect` ^3.10.0
 - `@effect/cli` ^0.47.0
 - `@effect/platform` ^0.68.0
@@ -299,6 +329,7 @@ Labels will be auto-created on next startup.
 - `@effect/schema` ^0.75.0
 
 **External Tools:**
+
 - GitHub CLI (`gh`) - Required
 - Claude CLI (`claude`) - Required (changed from `claudecode`)
 - AWS CLI (optional) - For AWS SSO authentication
