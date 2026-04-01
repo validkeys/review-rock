@@ -1,6 +1,5 @@
 import { Duration, Effect, Schedule } from "effect";
 import type { Config } from "../config/schema.js";
-import { buildReviewNotificationData } from "../utils/review-parser.js";
 import type {
   GitHubCommandError,
   LabelClaimFailedError,
@@ -16,6 +15,7 @@ import { GitHubService } from "../services/github.js";
 import type { ReviewError } from "../services/review.js";
 import { ReviewService } from "../services/review.js";
 import { TeamsNotificationService } from "../services/teams-notification.js";
+import { buildReviewNotificationData } from "../utils/review-parser.js";
 
 /**
  * Union type of all possible workflow errors
@@ -308,13 +308,15 @@ export const processPR = (
         };
 
         // Send notification - catch errors to prevent workflow failure
-        yield* teamsNotification.sendReviewNotification(config.teamsWebhookUrl, notificationData).pipe(
-          Effect.catchAll((error) =>
-            logWithPR(
-              Effect.logWarning(`Teams notification failed (non-critical): ${String(error)}`)
-            ).pipe(Effect.as(undefined))
-          )
-        );
+        yield* teamsNotification
+          .sendReviewNotification(config.teamsWebhookUrl, notificationData)
+          .pipe(
+            Effect.catchAll((error) =>
+              logWithPR(
+                Effect.logWarning(`Teams notification failed (non-critical): ${String(error)}`)
+              ).pipe(Effect.as(undefined))
+            )
+          );
       } else {
         yield* logWithPR(
           Effect.logDebug("Teams notifications disabled or webhook URL not configured")

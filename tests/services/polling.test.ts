@@ -520,7 +520,6 @@ describe("PollingService", () => {
         "../../src/services/polling.js"
       );
       const { GitHubService } = await import("../../src/services/github.js");
-      const { ConfigService } = await import("../../src/services/config.js");
       const { ClassificationService } = await import("../../src/services/classification.js");
       const { ReviewService } = await import("../../src/services/review.js");
       const { TeamsNotificationService } = await import("../../src/services/teams-notification.js");
