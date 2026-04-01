@@ -1,13 +1,13 @@
 import { describe, it } from "vitest";
 import type { ClassificationResult } from "../../src/types/pr-classification.js";
+import type { Config } from "../../src/config/schema.js";
 
 describe("PollingService", () => {
   describe("startPolling", () => {
     it("should filter out PRs with claim label", async ({ expect }) => {
       const { Effect, Layer } = await import("effect");
-      const { PollingService, PollingServiceLive } = await import("../../src/services/polling.js");
+      const { PollingService, makePollingServiceLayer } = await import("../../src/services/polling.js");
       const { GitHubService } = await import("../../src/services/github.js");
-      const { ConfigService } = await import("../../src/services/config.js");
       const { ClassificationService } = await import("../../src/services/classification.js");
       const { ReviewService } = await import("../../src/services/review.js");
 
@@ -59,19 +59,19 @@ describe("PollingService", () => {
         })
       );
 
-      // Mock ConfigService
-      const mockConfigService = Layer.succeed(
-        ConfigService,
-        ConfigService.of({
-          getConfig: Effect.succeed({
-            repository: "owner/repo",
-            pollingIntervalMinutes: 5,
-            claimLabel: "review-rock-claimed",
-            frontendPaths: [],
-            skills: { frontend: "", backend: "", mixed: "" },
-          }),
-        })
-      );
+      // Create test config
+      const testConfig: Config = {
+        repository: "owner/repo",
+        pollingIntervalMinutes: 5,
+        labels: {
+          readyForReview: "ready-for-review",
+          reviewInProgress: "review-in-progress",
+          reviewRefactorRequired: "review-refactor-required",
+          reviewApproved: "review-approved",
+        },
+        frontendPaths: [],
+        skills: { frontend: "", backend: "", mixed: "" },
+      };
 
       // Mock ClassificationService
       const mockClassificationService = Layer.succeed(
@@ -93,9 +93,22 @@ describe("PollingService", () => {
         })
       );
 
-      const TestLayer = PollingServiceLive.pipe(
+      // Create test config for this test
+      const config: Config = {
+        repository: "owner/repo",
+        pollingIntervalMinutes: 5,
+        labels: {
+          readyForReview: "ready-for-review",
+          reviewInProgress: "review-in-progress",
+          reviewRefactorRequired: "review-refactor-required",
+          reviewApproved: "review-approved",
+        },
+        frontendPaths: [],
+        skills: { frontend: "", backend: "", mixed: "" },
+      };
+
+      const TestLayer = makePollingServiceLayer(config).pipe(
         Layer.provide(mockGitHubService),
-        Layer.provide(mockConfigService),
         Layer.provide(mockClassificationService),
         Layer.provide(mockReviewService)
       );
@@ -115,7 +128,7 @@ describe("PollingService", () => {
 
     it("should use ConfigService for polling interval and claim label", async ({ expect }) => {
       const { Effect, Layer } = await import("effect");
-      const { PollingService, PollingServiceLive } = await import("../../src/services/polling.js");
+      const { PollingService, makePollingServiceLayer } = await import("../../src/services/polling.js");
       const { GitHubService } = await import("../../src/services/github.js");
       const { ConfigService } = await import("../../src/services/config.js");
       const { ClassificationService } = await import("../../src/services/classification.js");
@@ -189,9 +202,22 @@ describe("PollingService", () => {
         })
       );
 
-      const TestLayer = PollingServiceLive.pipe(
+      // Create test config for this test
+      const config: Config = {
+        repository: "owner/repo",
+        pollingIntervalMinutes: 5,
+        labels: {
+          readyForReview: "ready-for-review",
+          reviewInProgress: "review-in-progress",
+          reviewRefactorRequired: "review-refactor-required",
+          reviewApproved: "review-approved",
+        },
+        frontendPaths: [],
+        skills: { frontend: "", backend: "", mixed: "" },
+      };
+
+      const TestLayer = makePollingServiceLayer(config).pipe(
         Layer.provide(mockGitHubService),
-        Layer.provide(mockConfigService),
         Layer.provide(mockClassificationService),
         Layer.provide(mockReviewService)
       );
@@ -211,7 +237,7 @@ describe("PollingService", () => {
       const { ConfigService } = await import("../../src/services/config.js");
       const { ClassificationService } = await import("../../src/services/classification.js");
       const { ReviewService } = await import("../../src/services/review.js");
-      const { PollingService, PollingServiceLive } = await import("../../src/services/polling.js");
+      const { PollingService, makePollingServiceLayer } = await import("../../src/services/polling.js");
 
       const mockGitHubService = Layer.succeed(
         GitHubService,
@@ -286,9 +312,22 @@ describe("PollingService", () => {
         })
       );
 
-      const TestLayer = PollingServiceLive.pipe(
+      // Create test config for this test
+      const config: Config = {
+        repository: "owner/repo",
+        pollingIntervalMinutes: 5,
+        labels: {
+          readyForReview: "ready-for-review",
+          reviewInProgress: "review-in-progress",
+          reviewRefactorRequired: "review-refactor-required",
+          reviewApproved: "review-approved",
+        },
+        frontendPaths: [],
+        skills: { frontend: "", backend: "", mixed: "" },
+      };
+
+      const TestLayer = makePollingServiceLayer(config).pipe(
         Layer.provide(mockGitHubService),
-        Layer.provide(mockConfigService),
         Layer.provide(mockClassificationService),
         Layer.provide(mockReviewService)
       );
@@ -306,7 +345,7 @@ describe("PollingService", () => {
 
     it("should process unclaimed PRs through workflow", async ({ expect }) => {
       const { Effect, Layer } = await import("effect");
-      const { PollingService, PollingServiceLive } = await import("../../src/services/polling.js");
+      const { PollingService, makePollingServiceLayer } = await import("../../src/services/polling.js");
       const { GitHubService } = await import("../../src/services/github.js");
       const { ConfigService } = await import("../../src/services/config.js");
       const { ClassificationService } = await import("../../src/services/classification.js");
@@ -396,9 +435,22 @@ describe("PollingService", () => {
         })
       );
 
-      const TestLayer = PollingServiceLive.pipe(
+      // Create test config for this test
+      const config: Config = {
+        repository: "owner/repo",
+        pollingIntervalMinutes: 5,
+        labels: {
+          readyForReview: "ready-for-review",
+          reviewInProgress: "review-in-progress",
+          reviewRefactorRequired: "review-refactor-required",
+          reviewApproved: "review-approved",
+        },
+        frontendPaths: [],
+        skills: { frontend: "", backend: "", mixed: "" },
+      };
+
+      const TestLayer = makePollingServiceLayer(config).pipe(
         Layer.provide(mockGitHubService),
-        Layer.provide(mockConfigService),
         Layer.provide(mockClassificationService),
         Layer.provide(mockReviewService)
       );
@@ -416,7 +468,7 @@ describe("PollingService", () => {
 
     it("should continue polling if workflow fails for one PR", async ({ expect }) => {
       const { Effect, Layer } = await import("effect");
-      const { PollingService, PollingServiceLive } = await import("../../src/services/polling.js");
+      const { PollingService, makePollingServiceLayer } = await import("../../src/services/polling.js");
       const { GitHubService } = await import("../../src/services/github.js");
       const { ConfigService } = await import("../../src/services/config.js");
       const { ClassificationService } = await import("../../src/services/classification.js");
@@ -444,19 +496,19 @@ describe("PollingService", () => {
         })
       );
 
-      // Mock ConfigService
-      const mockConfigService = Layer.succeed(
-        ConfigService,
-        ConfigService.of({
-          getConfig: Effect.succeed({
-            repository: "owner/repo",
-            pollingIntervalMinutes: 5,
-            claimLabel: "review-rock-claimed",
-            frontendPaths: [],
-            skills: { frontend: "", backend: "", mixed: "" },
-          }),
-        })
-      );
+      // Create test config
+      const testConfig: Config = {
+        repository: "owner/repo",
+        pollingIntervalMinutes: 5,
+        labels: {
+          readyForReview: "ready-for-review",
+          reviewInProgress: "review-in-progress",
+          reviewRefactorRequired: "review-refactor-required",
+          reviewApproved: "review-approved",
+        },
+        frontendPaths: [],
+        skills: { frontend: "", backend: "", mixed: "" },
+      };
 
       // Mock ClassificationService
       const mockClassificationService = Layer.succeed(
@@ -478,9 +530,22 @@ describe("PollingService", () => {
         })
       );
 
-      const TestLayer = PollingServiceLive.pipe(
+      // Create test config for this test
+      const config: Config = {
+        repository: "owner/repo",
+        pollingIntervalMinutes: 5,
+        labels: {
+          readyForReview: "ready-for-review",
+          reviewInProgress: "review-in-progress",
+          reviewRefactorRequired: "review-refactor-required",
+          reviewApproved: "review-approved",
+        },
+        frontendPaths: [],
+        skills: { frontend: "", backend: "", mixed: "" },
+      };
+
+      const TestLayer = makePollingServiceLayer(config).pipe(
         Layer.provide(mockGitHubService),
-        Layer.provide(mockConfigService),
         Layer.provide(mockClassificationService),
         Layer.provide(mockReviewService)
       );

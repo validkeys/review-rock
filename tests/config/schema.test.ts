@@ -7,7 +7,12 @@ describe("ConfigSchema", () => {
     const validConfig = {
       repository: "validkeys/lumen",
       pollingIntervalMinutes: 5,
-      claimLabel: "review-rock-claimed",
+      labels: {
+        readyForReview: "ready-for-review",
+        reviewInProgress: "review-in-progress",
+        reviewRefactorRequired: "review-refactor-required",
+        reviewApproved: "review-approved",
+      },
       frontendPaths: ["apps/react-webapp", "lib/core-ui-system"],
       skills: {
         frontend: "vercel-react-best-practices",
@@ -24,7 +29,12 @@ describe("ConfigSchema", () => {
     const invalidConfig = {
       repository: "validkeys/lumen",
       pollingIntervalMinutes: 0,
-      claimLabel: "review-rock-claimed",
+      labels: {
+        readyForReview: "ready-for-review",
+        reviewInProgress: "review-in-progress",
+        reviewRefactorRequired: "review-refactor-required",
+        reviewApproved: "review-approved",
+      },
       frontendPaths: ["apps/react-webapp"],
       skills: {
         frontend: "vercel-react-best-practices",
@@ -42,7 +52,12 @@ describe("ConfigSchema", () => {
     const invalidConfig = {
       repository: "validkeys/lumen",
       pollingIntervalMinutes: -5,
-      claimLabel: "review-rock-claimed",
+      labels: {
+        readyForReview: "ready-for-review",
+        reviewInProgress: "review-in-progress",
+        reviewRefactorRequired: "review-refactor-required",
+        reviewApproved: "review-approved",
+      },
       frontendPaths: ["apps/react-webapp"],
       skills: {
         frontend: "vercel-react-best-practices",
@@ -60,7 +75,12 @@ describe("ConfigSchema", () => {
     const incompleteConfig = {
       repository: "validkeys/lumen",
       // missing pollingIntervalMinutes
-      claimLabel: "review-rock-claimed",
+      labels: {
+        readyForReview: "ready-for-review",
+        reviewInProgress: "review-in-progress",
+        reviewRefactorRequired: "review-refactor-required",
+        reviewApproved: "review-approved",
+      },
     };
 
     expect(() => {
@@ -71,7 +91,12 @@ describe("ConfigSchema", () => {
   it("should fail validation for missing repository", () => {
     const incompleteConfig = {
       pollingIntervalMinutes: 5,
-      claimLabel: "review-rock-claimed",
+      labels: {
+        readyForReview: "ready-for-review",
+        reviewInProgress: "review-in-progress",
+        reviewRefactorRequired: "review-refactor-required",
+        reviewApproved: "review-approved",
+      },
       frontendPaths: ["apps/react-webapp"],
       skills: {
         frontend: "vercel-react-best-practices",
@@ -89,7 +114,12 @@ describe("ConfigSchema", () => {
     const minimalConfig = {
       repository: "validkeys/lumen",
       pollingIntervalMinutes: 10,
-      claimLabel: "claimed",
+      labels: {
+        readyForReview: "ready-for-review",
+        reviewInProgress: "review-in-progress",
+        reviewRefactorRequired: "review-refactor-required",
+        reviewApproved: "review-approved",
+      },
       frontendPaths: [],
       skills: {
         frontend: "",

@@ -1,16 +1,28 @@
-import { Effect, Layer } from "effect";
-import { beforeAll, describe, expect, it } from "vitest";
+import { Effect } from "effect";
+import { describe, expect, it } from "vitest";
+import type { Config } from "../../src/config/schema.js";
 import {
   ClassificationService,
-  ClassificationServiceLive,
+  makeClassificationServiceLayer,
 } from "../../src/services/classification.js";
-import { ConfigServiceLive } from "../../src/services/config.js";
 
 describe("ClassificationService Integration", () => {
-  beforeAll(() => {
-    // Set up environment variables for real config testing
-    process.env.REVIEW_ROCK_FRONTEND_PATHS = "apps/react-webapp,lib/core-ui-system";
-  });
+  const testConfig: Config = {
+    repository: "test/repo",
+    pollingIntervalMinutes: 5,
+    labels: {
+      readyForReview: "ready-for-review",
+      reviewInProgress: "review-in-progress",
+      reviewRefactorRequired: "review-refactor-required",
+      reviewApproved: "review-approved",
+    },
+    frontendPaths: ["apps/react-webapp", "lib/core-ui-system"],
+    skills: {
+      frontend: "frontend-skill",
+      backend: "backend-skill",
+      mixed: "mixed-skill",
+    },
+  };
   it("should classify frontend paths from real config", async () => {
     const program = Effect.gen(function* () {
       const service = yield* ClassificationService;
@@ -22,7 +34,7 @@ describe("ClassificationService Integration", () => {
     });
 
     const result = await Effect.runPromise(
-      program.pipe(Effect.provide(ClassificationServiceLive.pipe(Layer.provide(ConfigServiceLive))))
+      program.pipe(Effect.provide(makeClassificationServiceLayer(testConfig)))
     );
 
     expect(result.type).toBe("frontend");
@@ -43,7 +55,7 @@ describe("ClassificationService Integration", () => {
     });
 
     const result = await Effect.runPromise(
-      program.pipe(Effect.provide(ClassificationServiceLive.pipe(Layer.provide(ConfigServiceLive))))
+      program.pipe(Effect.provide(makeClassificationServiceLayer(testConfig)))
     );
 
     expect(result.type).toBe("frontend");
@@ -65,7 +77,7 @@ describe("ClassificationService Integration", () => {
     });
 
     const result = await Effect.runPromise(
-      program.pipe(Effect.provide(ClassificationServiceLive.pipe(Layer.provide(ConfigServiceLive))))
+      program.pipe(Effect.provide(makeClassificationServiceLayer(testConfig)))
     );
 
     expect(result.type).toBe("backend");
@@ -89,7 +101,7 @@ describe("ClassificationService Integration", () => {
     });
 
     const result = await Effect.runPromise(
-      program.pipe(Effect.provide(ClassificationServiceLive.pipe(Layer.provide(ConfigServiceLive))))
+      program.pipe(Effect.provide(makeClassificationServiceLayer(testConfig)))
     );
 
     expect(result.type).toBe("mixed");

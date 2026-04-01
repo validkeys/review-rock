@@ -3,10 +3,9 @@ import { describe, expect, it } from "vitest";
 import type { Config } from "../../src/config/schema.js";
 import {
   ClassificationService,
-  ClassificationServiceLive,
+  makeClassificationServiceLayer,
   isFrontendPath,
 } from "../../src/services/classification.js";
-import { ConfigService } from "../../src/services/config.js";
 
 describe("ClassificationService", () => {
   describe("interface", () => {
@@ -71,7 +70,12 @@ describe("ClassificationService", () => {
     const mockConfig: Config = {
       repository: "test/repo",
       pollingIntervalMinutes: 5,
-      claimLabel: "test-claim",
+      labels: {
+        readyForReview: "ready-for-review",
+        reviewInProgress: "review-in-progress",
+        reviewRefactorRequired: "review-refactor-required",
+        reviewApproved: "review-approved",
+      },
       frontendPaths: ["apps/react-webapp", "lib/core-ui-system"],
       skills: {
         frontend: "frontend-skill",
@@ -80,14 +84,7 @@ describe("ClassificationService", () => {
       },
     };
 
-    const MockConfigService = Layer.succeed(
-      ConfigService,
-      ConfigService.of({
-        getConfig: Effect.succeed(mockConfig),
-      })
-    );
-
-    const testLayer = ClassificationServiceLive.pipe(Layer.provide(MockConfigService));
+    const testLayer = makeClassificationServiceLayer(mockConfig);
 
     it("should classify frontend-only PR", async () => {
       const program = Effect.gen(function* () {

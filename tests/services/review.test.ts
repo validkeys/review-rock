@@ -68,8 +68,9 @@ describe("ReviewService", () => {
 
       const result = buildClaudeCodeCommand(prContext, "test-skill");
 
-      expect(result.command).toEqual(["claudecode", "skill", "test-skill"]);
+      expect(result.command).toEqual(["claude", "--bare", "--allowed-tools", "Bash(gh:*)"]);
       expect(result.input).toBeDefined();
+      expect(result.input).toContain("/review 123");
     });
 
     it("should format PR context as markdown", () => {
@@ -93,14 +94,10 @@ describe("ReviewService", () => {
 
       const result = buildClaudeCodeCommand(prContext, "review-skill");
 
-      expect(result.input).toContain("# PR #456 Review Request");
-      expect(result.input).toContain("**Repository:** owner/repo");
-      expect(result.input).toContain("**PR Title:** Add new feature");
-      expect(result.input).toContain("## Changed Files");
-      expect(result.input).toContain("src/feature.ts");
-      expect(result.input).toContain("tests/feature.test.ts");
-      expect(result.input).toContain("## Diff");
-      expect(result.input).toContain("diff --git a/file.ts");
+      expect(result.input).toContain("/review 456");
+      expect(result.input).toContain("Repository: owner/repo");
+      expect(result.input).toContain("**review-skill:** Apply relevant best practices");
+      expect(result.input).toContain("# Review Guidelines");
     });
 
     it("should handle special characters in PR title", () => {
@@ -124,8 +121,9 @@ describe("ReviewService", () => {
 
       const result = buildClaudeCodeCommand(prContext, "test");
 
-      expect(result.input).toContain("Fix: Handle `special` chars & symbols");
-      expect(result.command).toEqual(["claudecode", "skill", "test"]);
+      expect(result.input).toContain("/review 789");
+      expect(result.input).toContain("Repository: owner/repo");
+      expect(result.command).toEqual(["claude", "--bare", "--allowed-tools", "Bash(gh:*)"]);
     });
   });
 

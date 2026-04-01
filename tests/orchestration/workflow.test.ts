@@ -1,5 +1,6 @@
 import { Effect, Layer } from "effect";
 import { describe, expect, it } from "vitest";
+import type { Config } from "../../src/config/schema.js";
 import { LabelClaimFailedError } from "../../src/errors/github.js";
 import { ReviewGenerationError } from "../../src/errors/review.js";
 import { processPR } from "../../src/orchestration/workflow.js";
@@ -27,15 +28,31 @@ const mockDiff = `diff --git a/apps/react-webapp/src/components/Button.tsx b/app
 @@ -1,3 +1,4 @@
 +export const Button = () => <button>Click me</button>;`;
 
+const testConfig: Config = {
+  repository: "owner/repo",
+  pollingIntervalMinutes: 5,
+  labels: {
+    readyForReview: "ready-for-review",
+    reviewInProgress: "review-in-progress",
+    reviewRefactorRequired: "review-refactor-required",
+    reviewApproved: "review-approved",
+  },
+  frontendPaths: ["apps/react-webapp"],
+  skills: {
+    frontend: "frontend-skill",
+    backend: "backend-skill",
+    mixed: "mixed-skill",
+  },
+};
+
 describe("Workflow Orchestration", () => {
   describe("processPR", () => {
     it("should successfully process a PR through complete workflow", () =>
       Effect.gen(function* () {
         const repo = "owner/repo";
         const prNumber = 123;
-        const label = "reviewing";
 
-        const result = yield* processPR(repo, prNumber, label);
+        const result = yield* processPR(repo, prNumber, testConfig);
 
         expect(result).toContain("frontend");
         expect(result.length).toBeGreaterThan(0);
@@ -48,6 +65,10 @@ describe("Workflow Orchestration", () => {
               claimPR: () => Effect.void,
               getPRDetails: () => Effect.succeed(mockPRDetails),
               getPRDiff: () => Effect.succeed(mockDiff),
+              removeLabel: () => Effect.void,
+              addLabel: () => Effect.void,
+              postCommentWithId: () => Effect.succeed("comment-id-123"),
+              updateComment: () => Effect.void,
             }),
             // Mock ClassificationService
             Layer.succeed(ClassificationService, {
@@ -66,70 +87,82 @@ describe("Workflow Orchestration", () => {
         Effect.runPromise
       ));
 
-    it("should not remove label if claim fails", () =>
+    it("should swap labels at workflow start", () =>
       Effect.gen(function* () {
         const repo = "owner/repo";
         const prNumber = 123;
-        const label = "reviewing";
 
-        const labelRemoved = false;
+        let readyForReviewRemoved = false;
+        let reviewInProgressAdded = false;
 
-        yield* processPR(repo, prNumber, label).pipe(
-          Effect.catchAll(() => Effect.void) // Ignore the error
+        const mockGitHubService = GitHubService.of({
+          listOpenPRs: () => Effect.succeed([]),
+          getPRDetails: () => Effect.succeed(mockPRDetails),
+          getPRDiff: () => Effect.succeed(mockDiff),
+          removeLabel: (_r, _p, label) =>
+            Effect.gen(function* () {
+              if (label === "ready-for-review") readyForReviewRemoved = true;
+              yield* Effect.void;
+            }),
+          addLabel: (_r, _p, label) =>
+            Effect.gen(function* () {
+              if (label === "review-in-progress") reviewInProgressAdded = true;
+              yield* Effect.void;
+            }),
+          postCommentWithId: () => Effect.succeed("comment-id-123"),
+          updateComment: () => Effect.void,
+        });
+
+        yield* processPR(repo, prNumber, testConfig).pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              Layer.succeed(GitHubService, mockGitHubService),
+              Layer.succeed(ClassificationService, {
+                classifyPR: () =>
+                  Effect.succeed({
+                    type: "frontend" as const,
+                    matchedPaths: ["apps/react-webapp/src/components/Button.tsx"],
+                  }),
+              }),
+              Layer.succeed(ReviewService, {
+                generateReview: () => Effect.succeed("Mock review"),
+              })
+            )
+          )
         );
 
-        expect(labelRemoved).toBe(false);
-      }).pipe(
-        Effect.provide(
-          Layer.mergeAll(
-            Layer.succeed(GitHubService, {
-              listOpenPRs: () => Effect.succeed([]),
-              claimPR: () => Effect.fail(new LabelClaimFailedError("Already claimed")),
-              getPRDetails: () => Effect.succeed(mockPRDetails),
-              getPRDiff: () => Effect.succeed(mockDiff),
-              removeLabel: () => {
-                // This should NOT be called if claim fails
-                throw new Error("removeLabel should not be called when claim fails");
-              },
-            }),
-            Layer.succeed(ClassificationService, {
-              classifyPR: () =>
-                Effect.succeed({
-                  type: "frontend" as const,
-                  matchedPaths: ["apps/react-webapp/src/components/Button.tsx"],
-                }),
-            }),
-            Layer.succeed(ReviewService, {
-              generateReview: () => Effect.succeed("Mock review"),
-            })
-          )
-        ),
-        Effect.runPromise
-      ));
+        expect(readyForReviewRemoved).toBe(true);
+        expect(reviewInProgressAdded).toBe(true);
+      }).pipe(Effect.runPromise));
 
-    it("should remove label if classification fails after claim", () =>
+    it("should reset labels if classification fails after label swap", () =>
       Effect.gen(function* () {
         const repo = "owner/repo";
         const prNumber = 123;
-        const label = "reviewing";
 
-        let claimSucceeded = false;
-        let labelRemoved = false;
+        let labelSwapCompleted = false;
+        let labelResetAttempted = false;
 
         const gitHubService = GitHubService.of({
           listOpenPRs: () => Effect.succeed([]),
-          claimPR: () =>
-            Effect.gen(function* () {
-              claimSucceeded = true;
-              yield* Effect.void;
-            }),
           getPRDetails: () => Effect.succeed(mockPRDetails),
           getPRDiff: () => Effect.succeed(mockDiff),
-          removeLabel: () =>
+          removeLabel: (_, __, label) =>
             Effect.gen(function* () {
-              labelRemoved = true;
+              if (label === "review-in-progress") {
+                labelResetAttempted = true;
+              }
               yield* Effect.void;
             }),
+          addLabel: (_, __, label) =>
+            Effect.gen(function* () {
+              if (label === "review-in-progress") {
+                labelSwapCompleted = true;
+              }
+              yield* Effect.void;
+            }),
+          postCommentWithId: () => Effect.succeed("comment-id-123"),
+          updateComment: () => Effect.void,
         });
 
         const classificationService = ClassificationService.of({
@@ -140,7 +173,7 @@ describe("Workflow Orchestration", () => {
           generateReview: () => Effect.succeed("Mock review"),
         });
 
-        yield* processPR(repo, prNumber, label).pipe(
+        yield* processPR(repo, prNumber, testConfig).pipe(
           Effect.provide(
             Layer.mergeAll(
               Layer.succeed(GitHubService, gitHubService),
@@ -151,42 +184,45 @@ describe("Workflow Orchestration", () => {
           Effect.catchAll(() => Effect.void) // Ignore the error
         );
 
-        expect(claimSucceeded).toBe(true);
-        expect(labelRemoved).toBe(true);
+        expect(labelSwapCompleted).toBe(true);
+        expect(labelResetAttempted).toBe(true);
       }).pipe(Effect.runPromise));
 
-    it("should remove label if review generation fails after claim", () =>
+    it("should reset labels if review generation fails after label swap", () =>
       Effect.gen(function* () {
         const repo = "owner/repo";
         const prNumber = 123;
-        const label = "reviewing";
 
-        let claimSucceeded = false;
-        let labelRemoved = false;
+        let labelSwapCompleted = false;
+        let labelResetAttempted = false;
 
         const gitHubService = GitHubService.of({
           listOpenPRs: () => Effect.succeed([]),
-          claimPR: () =>
-            Effect.gen(function* () {
-              claimSucceeded = true;
-              yield* Effect.void;
-            }),
           getPRDetails: () => Effect.succeed(mockPRDetails),
           getPRDiff: () => Effect.succeed(mockDiff),
-          removeLabel: () =>
+          removeLabel: (_, __, label) =>
             Effect.gen(function* () {
-              labelRemoved = true;
+              if (label === "review-in-progress") {
+                labelResetAttempted = true;
+              }
               yield* Effect.void;
             }),
+          addLabel: (_, __, label) =>
+            Effect.gen(function* () {
+              if (label === "review-in-progress") {
+                labelSwapCompleted = true;
+              }
+              yield* Effect.void;
+            }),
+          postCommentWithId: () => Effect.succeed("comment-id-123"),
+          updateComment: () => Effect.void,
         });
 
         const classificationService = ClassificationService.of({
           classifyPR: () =>
             Effect.succeed({
-              classification: "frontend" as const,
-              frontendFiles: ["apps/react-webapp/src/components/Button.tsx"],
-              backendFiles: [],
-              totalFiles: 1,
+              type: "frontend" as const,
+              matchedPaths: ["apps/react-webapp/src/components/Button.tsx"],
             }),
         });
 
@@ -195,15 +231,15 @@ describe("Workflow Orchestration", () => {
             Effect.fail(new ReviewGenerationError("Review generation failed", "timeout")),
         });
 
-        yield* processPR(repo, prNumber, label).pipe(
+        yield* processPR(repo, prNumber, testConfig).pipe(
           Effect.provide(Layer.succeed(GitHubService, gitHubService)),
           Effect.provide(Layer.succeed(ClassificationService, classificationService)),
           Effect.provide(Layer.succeed(ReviewService, reviewService)),
           Effect.catchAll(() => Effect.void) // Ignore the error
         );
 
-        expect(claimSucceeded).toBe(true);
-        expect(labelRemoved).toBe(true);
+        expect(labelSwapCompleted).toBe(true);
+        expect(labelResetAttempted).toBe(true);
       }).pipe(Effect.runPromise));
   });
 });
