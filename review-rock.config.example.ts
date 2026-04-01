@@ -294,6 +294,48 @@ const config: Config = {
      */
     mixed: "vercel-react-best-practices,typescript-expert",
   },
+
+  /**
+   * Teams notification configuration for PR review alerts
+   *
+   * @optional
+   *
+   * Send Microsoft Teams notifications when PR reviews are completed.
+   * Uses adaptive cards with dynamic styling based on review verdict.
+   *
+   * Setup:
+   * 1. Create an Incoming Webhook in your Teams channel
+   * 2. Copy the webhook URL
+   * 3. Set teamsWebhookUrl to the webhook URL
+   * 4. Set enableTeamsNotifications to true
+   *
+   * Webhook URL format: https://outlook.office.com/webhook/...
+   *
+   * Card styling by verdict:
+   * - Approve ✅: Green card with "PR Review - Approved ✅" title
+   * - Request Changes ❌: Red card with "PR Review - Changes Required ❌" title
+   * - Comment 💬: Blue card with "PR Review - Comments Posted 💬" title
+   *
+   * Error handling:
+   * - Notification failures are logged but don't stop the review process
+   * - Review posting always completes even if notification fails
+   *
+   * Examples:
+   * ```typescript
+   * // Disabled (default)
+   * {
+   *   enableTeamsNotifications: false
+   * }
+   *
+   * // Enabled with webhook URL
+   * {
+   *   teamsWebhookUrl: "https://outlook.office.com/webhook/...",
+   *   enableTeamsNotifications: true
+   * }
+   * ```
+   */
+  teamsWebhookUrl: undefined,
+  enableTeamsNotifications: false,
 };
 
 export default config;
