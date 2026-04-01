@@ -107,6 +107,204 @@ Not applicable - this is the initial release.
 
 ---
 
+## [0.2.0] - 2026-03-31
+
+### Added
+
+**Label-Based Workflow:**
+- Label-based state machine for PR review lifecycle
+- Four workflow labels: `ready-for-review`, `review-in-progress`, `review-refactor-required`, `review-approved`
+- Automatic label creation on startup with appropriate colors and descriptions
+- Atomic label swapping for distributed coordination (no race conditions)
+- Only PRs with `ready-for-review` label are queued for review
+
+**Automatic Retry & Resilience:**
+- Intelligent retry logic for transient failures (network issues, token expiry, rate limits)
+- Network operations: 5 retries with exponential backoff (5s → 10s → 20s → 40s → 80s)
+- Review generation: 10 retries with exponential backoff (10s → 20s → 40s → 80s → 160s...)
+- Automatic handling of computer sleep and network interruptions
+- Graceful AWS SSO token expiry handling with automatic resume after refresh
+- PR stays in `review-in-progress` during all retries
+- Only resets to `ready-for-review` after all retries exhausted
+
+**Enhanced Review Experience:**
+- Initial "🤖 analyzing..." comment posted immediately when PR is claimed
+- Same comment updated with full review when complete (no multiple comments)
+- Automated outcome determination from review content (approved vs refactor-required)
+- Final label automatically applied based on review analysis
+
+**Improved Logging:**
+- Migrated to Effect's structured logging system with pretty formatting
+- PR number annotations on all workflow logs for traceability
+- Log levels: INFO, WARN, ERROR, DEBUG with color-coded output
+- Retry attempts logged with clear context
+- Transient vs permanent error distinction in logs
+
+**Claude Integration:**
+- Uses Claude's built-in `/review` command instead of passing full diffs
+- Claude fetches PR diff directly via GitHub CLI (reduces data transfer)
+- Skill-specific guidance provided based on PR classification
+- Concise review format with severity markers (🔴 Critical, 🟡 Warning, 🔵 Suggestion)
+
+### Changed
+
+**Breaking Changes:**
+- Configuration schema updated: `claimLabel` replaced with `labels` object
+- Now uses `claude` CLI instead of `claudecode` CLI
+- Configuration must be updated to use new labels structure:
+  ```typescript
+  // Old
+  claimLabel: "review-rock-claimed"
+
+  // New
+  labels: {
+    readyForReview: "ready-for-review",
+    reviewInProgress: "review-in-progress",
+    reviewRefactorRequired: "review-refactor-required",
+    reviewApproved: "review-approved"
+  }
+  ```
+
+**Workflow Changes:**
+- Reviews now triggered by `ready-for-review` label instead of absence of claim label
+- Labels swapped atomically (remove ready → add in-progress) instead of just adding claim label
+- Comment posting strategy changed to update single comment instead of posting new ones
+- Review generation now uses `/review` command with skill guidance instead of direct skill execution
+
+**Performance Improvements:**
+- Parallel label creation on startup (all 4 labels created concurrently)
+- Reduced diff data transfer (Claude fetches diffs itself)
+- More efficient GitHub API usage with targeted operations
+
+### Fixed
+
+- Race conditions in distributed coordination via atomic label swapping
+- Duplicate reviews from multiple instances
+- PRs getting stuck in claimed state after errors
+- Network interruptions causing permanent failures
+- Token expiry requiring manual restart
+- Labels not appearing on GitHub (auto-creation on startup)
+- Missing context in review requests (now uses /review with full context)
+
+### Documentation
+
+- Complete rewrite of README.md for label-based workflow
+- New "Resilience & Error Handling" section in README
+- Updated TROUBLESHOOTING.md with automatic retry behavior
+- New "Computer Sleep / Network Interruption" troubleshooting section
+- Updated "AWS SSO Token Expired" with automatic handling instructions
+- Updated example configuration file with labels and workflow explanation
+- All code examples updated to use new configuration structure
+
+### Technical Details
+
+**Architecture Changes:**
+- Label-based state machine replaces claim label pattern
+- Retry schedules implemented with Effect Schedule combinators
+- Transient error detection with pattern matching
+- Single comment ID tracked throughout workflow for updates
+
+**Error Classification:**
+- Transient errors: Network failures, token expiry, rate limits, timeouts
+- Permanent errors: Skill not found, invalid config, permission denied
+- Automatic retry only for transient errors
+
+**Review Generation:**
+- Command: `claude --bare --allowed-tools Bash(gh:*)`
+- Input: `/review <pr-number>` with skill guidance and format requirements
+- Skill guidance varies by classification (frontend/backend/mixed)
+- Review text analyzed for outcome (critical issues, explicit verdicts)
+
+**Label Colors:**
+- `ready-for-review`: Green (#0E8A16)
+- `review-in-progress`: Yellow (#FBCA04)
+- `review-refactor-required`: Red (#D93F0B)
+- `review-approved`: Green (#0E8A16)
+
+### Migration Guide
+
+**1. Update Configuration File:**
+
+```typescript
+// Old configuration
+const config: Config = {
+  repository: "owner/repo",
+  pollingIntervalMinutes: 5,
+  claimLabel: "review-rock-claimed",  // ❌ Remove this
+  frontendPaths: ["apps/frontend"],
+  skills: { ... }
+};
+
+// New configuration
+const config: Config = {
+  repository: "owner/repo",
+  pollingIntervalMinutes: 5,
+  labels: {  // ✅ Add this
+    readyForReview: "ready-for-review",
+    reviewInProgress: "review-in-progress",
+    reviewRefactorRequired: "review-refactor-required",
+    reviewApproved: "review-approved"
+  },
+  frontendPaths: ["apps/frontend"],
+  skills: { ... }
+};
+```
+
+**2. Install Claude CLI:**
+
+Replace `claudecode` with `claude`:
+```bash
+# Install claude from https://claude.ai/download
+# Authenticate on first run
+claude
+```
+
+**3. Add Labels to PRs:**
+
+PRs now require the `ready-for-review` label to be queued:
+```bash
+gh pr edit <pr-number> --add-label "ready-for-review"
+```
+
+**4. Remove Old Labels:**
+
+Remove old claim labels if they exist:
+```bash
+gh label delete "review-rock-claimed" --repo owner/repo
+```
+
+**5. Restart Review Rock:**
+
+Labels will be auto-created on next startup.
+
+### Known Limitations
+
+- No Microsoft Teams notifications (planned for future release)
+- No web UI or dashboard (planned for future release)
+- No persistent state—all coordination is ephemeral via GitHub labels
+- No configuration hot-reloading—restart required for config changes
+- Single repository monitoring per instance—run multiple instances for multiple repos
+- Review outcome determination is text-based (may misclassify ambiguous reviews)
+
+### Dependencies
+
+**Changed:**
+- Now requires `claude` CLI instead of `claudecode` CLI
+
+**Runtime:** (unchanged)
+- `effect` ^3.10.0
+- `@effect/cli` ^0.47.0
+- `@effect/platform` ^0.68.0
+- `@effect/platform-node` ^0.63.0
+- `@effect/schema` ^0.75.0
+
+**External Tools:**
+- GitHub CLI (`gh`) - Required
+- Claude CLI (`claude`) - Required (changed from `claudecode`)
+- AWS CLI (optional) - For AWS SSO authentication
+
+---
+
 ## [Unreleased]
 
 ### Planned Features
