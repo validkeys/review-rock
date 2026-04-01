@@ -1,0 +1,699 @@
+milestone: m1
+name: Teams Notification Service Implementation
+generated: 2026-04-01
+
+style_anchors:
+  - path: src/services/github.ts
+    lines: 40-150
+    description: |
+      Example of Effect-TS service pattern with interface, Context.GenericTag,
+      and Layer implementation. Shows proper error handling with tagged errors.
+  - path: src/services/review.ts
+    lines: 38-54
+    description: |
+      Example of service interface definition with Effect.Effect return types
+      and proper error union types.
+  - path: /Users/kydavis/Sites/lumen/b-containers/core-cli/src/commands/deploy/webhook-notifier.ts
+    lines: 135-283
+    description: |
+      Reference implementation of Microsoft Teams Adaptive Card formatting.
+      Shows payload structure, conditional styling, and FactSet/Actions usage.
+  - path: tests/services/github.test.ts
+    lines: 1-75
+    description: |
+      Example of testing Effect services with mocked CommandExecutor.
+      Shows how to test success and failure scenarios with Effect.runPromiseExit.
+
+global_constraints:
+  allowed_patterns:
+    - "Use Effect.Effect for all service methods"
+    - "Define service interface with explicit error types"
+    - "Create Context.GenericTag for dependency injection"
+    - "Implement service Layer with Layer.effect"
+    - "Use tagged errors from src/errors/teams.ts"
+    - "Use fetch for HTTP requests wrapped in Effect.promise"
+  forbidden_patterns:
+    - "Direct async/await in service methods"
+    - "Type assertions (as any, as unknown)"
+    - "Promise.then/catch - use Effect.promise instead"
+    - "console.log - use Effect.log* instead"
+  tdd_required: true
+  max_task_duration_minutes: 150
+  commit_strategy: "Commit after each task"
+
+quality_gates:
+  - stage: pre-commit
+    commands:
+      - pnpm run lint
+      - pnpm run typecheck
+      - pnpm run test
+  - stage: task-completion
+    criteria:
+      - All tests passing
+      - No lint errors
+      - No type errors
+      - Code formatted with Biome
+      - No 'any' types in service code
+
+tasks:
+  - id: m1-001
+    name: Create Teams notification error types
+    description: |
+      Define tagged error classes for Teams notification failures in a new
+      src/errors/teams.ts file. Follow the existing error pattern from github.ts.
+    estimate_minutes: 30
+    type: code
+    dependencies: []
+    files:
+      create:
+        - src/errors/teams.ts
+      touch_only:
+        - src/errors/github.ts
+    instructions: |
+      **Objective:**
+      Create tagged error types for Teams notification service failures.
+
+      **Implementation Steps:**
+      1. Create new file: src/errors/teams.ts
+      2. Define TeamsNotificationError class:
+         ```typescript
+         import { Data } from "effect";
+
+         /**
+          * Error when Teams webhook notification fails
+          */
+         export class TeamsNotificationError extends Data.TaggedError("TeamsNotificationError")<{
+           readonly message: string;
+           readonly statusCode?: number;
+         }> {}
+         ```
+      3. Export the error class
+
+      **Constraints:**
+      - ONLY create src/errors/teams.ts
+      - Use Data.TaggedError from Effect
+      - Follow the pattern from src/errors/github.ts
+      - Include message and optional statusCode fields
+      - Add JSDoc comments
+
+      **TDD Checklist:**
+      - [ ] Error class extends Data.TaggedError
+      - [ ] Error is exported
+      - [ ] TypeScript compiles without errors
+      - [ ] Error has proper tag for pattern matching
+
+      **Validation:**
+      ```bash
+      pnpm run typecheck
+      ```
+      Expected: No type errors
+
+      **Drift Policy:**
+      If you encounter unexpected patterns or dependencies, STOP immediately.
+      Do not fix mid-stream. Report the issue and await guidance.
+
+    validation:
+      commands:
+        - pnpm run typecheck
+      expected_output: "No type errors"
+      on_failure: "Check Data.TaggedError syntax and imports"
+
+  - id: m1-002
+    name: Define TeamsNotificationService interface
+    description: |
+      Create service interface with sendReviewNotification method that takes
+      PR context and review details, returns Effect with error handling.
+    estimate_minutes: 45
+    type: code
+    dependencies: [m1-001]
+    files:
+      create:
+        - src/services/teams-notification.ts
+      touch_only:
+        - src/services/github.ts
+        - src/errors/teams.ts
+    instructions: |
+      **Objective:**
+      Define the TeamsNotificationService interface and types for notification data.
+
+      **Implementation Steps:**
+      1. Create new file: src/services/teams-notification.ts
+      2. Import required dependencies:
+         ```typescript
+         import { Context, Effect, Layer } from "effect";
+         import type { TeamsNotificationError } from "../errors/teams.js";
+         ```
+      3. Define notification data interface:
+         ```typescript
+         /**
+          * Review notification data for Teams
+          */
+         export interface ReviewNotificationData {
+           readonly prNumber: number;
+           readonly prTitle: string;
+           readonly prAuthor: string;
+           readonly prUrl: string;
+           readonly reviewVerdict: "approve" | "request-changes" | "comment";
+           readonly commentUrl: string;
+           readonly repository: string;
+         }
+         ```
+      4. Define service interface:
+         ```typescript
+         /**
+          * TeamsNotificationService sends review notifications to Microsoft Teams
+          *
+          * Sends adaptive card notifications when PR reviews are completed.
+          * Handles webhook POST requests with proper error handling and logging.
+          */
+         export interface TeamsNotificationService {
+           /**
+            * Send a review notification to Teams webhook
+            * @param webhookUrl - Teams incoming webhook URL
+            * @param data - Review notification data
+            * @returns Effect that resolves to void or TeamsNotificationError
+            */
+           readonly sendReviewNotification: (
+             webhookUrl: string,
+             data: ReviewNotificationData
+           ) => Effect.Effect<void, TeamsNotificationError>;
+         }
+         ```
+      5. Create Context tag:
+         ```typescript
+         /**
+          * TeamsNotificationService tag for dependency injection
+          */
+         export const TeamsNotificationService = Context.GenericTag<TeamsNotificationService>(
+           "@services/TeamsNotificationService"
+         );
+         ```
+
+      **Constraints:**
+      - ONLY create src/services/teams-notification.ts
+      - Follow service interface pattern from github.ts
+      - Use Effect.Effect for return types
+      - Include comprehensive JSDoc comments
+      - Define ReviewNotificationData interface first
+
+      **TDD Checklist:**
+      - [ ] Service interface defined with sendReviewNotification method
+      - [ ] Method returns Effect<void, TeamsNotificationError>
+      - [ ] ReviewNotificationData interface has all required fields
+      - [ ] Context.GenericTag created for DI
+      - [ ] TypeScript compiles without errors
+
+      **Validation:**
+      ```bash
+      pnpm run typecheck
+      ```
+      Expected: No type errors, interface properly defined
+
+      **Drift Policy:**
+      If you encounter unexpected patterns or dependencies, STOP immediately.
+      Do not fix mid-stream. Report the issue and await guidance.
+
+    validation:
+      commands:
+        - pnpm run typecheck
+      expected_output: "No type errors"
+      on_failure: "Check Effect import and interface syntax"
+
+  - id: m1-003
+    name: Implement Adaptive Card payload builder
+    description: |
+      Create buildAdaptiveCardPayload function that generates Teams Adaptive Card
+      JSON with dynamic styling based on review verdict. Reference lumen webhook-notifier.ts.
+    estimate_minutes: 90
+    type: code
+    dependencies: [m1-002]
+    files:
+      modify:
+        - src/services/teams-notification.ts
+      touch_only:
+        - /Users/kydavis/Sites/lumen/b-containers/core-cli/src/commands/deploy/webhook-notifier.ts
+    instructions: |
+      **Objective:**
+      Implement the Adaptive Card payload builder with verdict-based styling.
+
+      **Implementation Steps:**
+      1. Open src/services/teams-notification.ts
+      2. Add helper function to determine card color:
+         ```typescript
+         /**
+          * Get card color and title based on review verdict
+          */
+         const getCardStyling = (
+           verdict: ReviewNotificationData["reviewVerdict"]
+         ): { color: "Good" | "Attention" | "Accent"; title: string } => {
+           switch (verdict) {
+             case "approve":
+               return { color: "Good", title: "PR Review - Approved ✅" };
+             case "request-changes":
+               return { color: "Attention", title: "PR Review - Changes Required ❌" };
+             case "comment":
+               return { color: "Accent", title: "PR Review - Comments Posted 💬" };
+           }
+         };
+         ```
+      3. Add payload builder function:
+         ```typescript
+         /**
+          * Build Microsoft Teams Adaptive Card payload
+          * Reference: https://adaptivecards.io/designer/
+          */
+         const buildAdaptiveCardPayload = (data: ReviewNotificationData): object => {
+           const styling = getCardStyling(data.reviewVerdict);
+           const timestamp = new Date().toLocaleString("en-US", {
+             year: "numeric",
+             month: "2-digit",
+             day: "2-digit",
+             hour: "numeric",
+             minute: "2-digit",
+             hour12: true,
+             timeZoneName: "short",
+           });
+
+           return {
+             type: "message",
+             attachments: [
+               {
+                 contentType: "application/vnd.microsoft.card.adaptive",
+                 contentUrl: data.commentUrl,
+                 content: {
+                   $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+                   type: "AdaptiveCard",
+                   version: "1.4",
+                   body: [
+                     {
+                       type: "TextBlock",
+                       text: styling.title,
+                       weight: "Bolder",
+                       size: "Large",
+                       color: styling.color,
+                     },
+                     {
+                       type: "TextBlock",
+                       text: "Review Details",
+                       weight: "Bolder",
+                       size: "Medium",
+                     },
+                     {
+                       type: "FactSet",
+                       facts: [
+                         {
+                           title: "PR:",
+                           value: `#${data.prNumber} - ${data.prTitle}`,
+                         },
+                         {
+                           title: "Author:",
+                           value: data.prAuthor,
+                         },
+                         {
+                           title: "Repository:",
+                           value: data.repository,
+                         },
+                         {
+                           title: "Date:",
+                           value: timestamp,
+                         },
+                       ],
+                     },
+                   ],
+                   actions: [
+                     {
+                       type: "Action.OpenUrl",
+                       title: "View PR",
+                       url: data.prUrl,
+                     },
+                     {
+                       type: "Action.OpenUrl",
+                       title: "View Review",
+                       url: data.commentUrl,
+                     },
+                   ],
+                 },
+               },
+             ],
+           };
+         };
+         ```
+      4. Reference the lumen webhook-notifier.ts for Adaptive Card structure
+      5. Ensure proper TypeScript typing (no 'any')
+
+      **Constraints:**
+      - ONLY modify src/services/teams-notification.ts
+      - Use Adaptive Card format version 1.4
+      - Dynamic color: Good (green), Attention (red), Accent (blue)
+      - Include FactSet with PR details
+      - Include actions for View PR and View Review
+      - No 'any' types - use object or proper types
+
+      **TDD Checklist:**
+      - [ ] getCardStyling returns correct color and title for each verdict
+      - [ ] buildAdaptiveCardPayload returns valid Adaptive Card JSON
+      - [ ] Payload includes all required fields
+      - [ ] Actions link to PR and review comment
+      - [ ] TypeScript compiles without errors
+      - [ ] No 'any' types used
+
+      **Validation:**
+      ```bash
+      pnpm run typecheck
+      pnpm run lint
+      ```
+      Expected: No type errors, no lint errors
+
+      **Drift Policy:**
+      If you encounter unexpected patterns or dependencies, STOP immediately.
+      Do not fix mid-stream. Report the issue and await guidance.
+
+    validation:
+      commands:
+        - pnpm run typecheck
+        - pnpm run lint
+      expected_output: "No errors"
+      on_failure: "Check Adaptive Card structure and TypeScript types"
+
+  - id: m1-004
+    name: Implement sendReviewNotification method
+    description: |
+      Implement the service method that posts the Adaptive Card payload to the
+      Teams webhook URL using fetch, with proper Effect error handling and logging.
+    estimate_minutes: 60
+    type: code
+    dependencies: [m1-003]
+    files:
+      modify:
+        - src/services/teams-notification.ts
+    instructions: |
+      **Objective:**
+      Implement the actual webhook POST request with error handling.
+
+      **Implementation Steps:**
+      1. Open src/services/teams-notification.ts
+      2. Add the implementation helper:
+         ```typescript
+         import { TeamsNotificationError } from "../errors/teams.js";
+
+         /**
+          * Send notification to Teams webhook
+          */
+         const executeSendNotification = (
+           webhookUrl: string,
+           data: ReviewNotificationData
+         ): Effect.Effect<void, TeamsNotificationError> =>
+           Effect.gen(function* () {
+             yield* Effect.logDebug(`Sending Teams notification for PR #${data.prNumber}`);
+
+             const payload = buildAdaptiveCardPayload(data);
+
+             // Send webhook request using fetch
+             const response = yield* Effect.tryPromise({
+               try: () =>
+                 fetch(webhookUrl, {
+                   method: "POST",
+                   headers: {
+                     "Content-Type": "application/json",
+                   },
+                   body: JSON.stringify(payload),
+                 }),
+               catch: (error) =>
+                 new TeamsNotificationError({
+                   message: `Failed to send Teams notification: ${String(error)}`,
+                 }),
+             });
+
+             // Check response status
+             if (!response.ok) {
+               return yield* Effect.fail(
+                 new TeamsNotificationError({
+                   message: `Teams webhook returned error: ${response.status} ${response.statusText}`,
+                   statusCode: response.status,
+                 })
+               );
+             }
+
+             yield* Effect.logInfo(`✓ Teams notification sent for PR #${data.prNumber}`);
+           });
+         ```
+      3. Add the service Layer implementation:
+         ```typescript
+         /**
+          * Live implementation of TeamsNotificationService
+          */
+         export const TeamsNotificationServiceLive = Layer.succeed(
+           TeamsNotificationService,
+           TeamsNotificationService.of({
+             sendReviewNotification: (webhookUrl: string, data: ReviewNotificationData) =>
+               executeSendNotification(webhookUrl, data),
+           })
+         );
+         ```
+
+      **Constraints:**
+      - ONLY modify src/services/teams-notification.ts
+      - Use Effect.tryPromise for fetch wrapper
+      - Map fetch errors to TeamsNotificationError
+      - Check response.ok and fail with appropriate error
+      - Use Effect.logDebug and Effect.logInfo for logging
+      - Create Layer.succeed for service implementation
+
+      **TDD Checklist:**
+      - [ ] executeSendNotification is Effect-based
+      - [ ] fetch wrapped in Effect.tryPromise
+      - [ ] Response status checked and errors mapped
+      - [ ] Logging includes PR number
+      - [ ] TeamsNotificationServiceLive Layer exported
+      - [ ] TypeScript compiles without errors
+
+      **Validation:**
+      ```bash
+      pnpm run typecheck
+      ```
+      Expected: No type errors
+
+      **Drift Policy:**
+      If you encounter unexpected patterns or dependencies, STOP immediately.
+      Do not fix mid-stream. Report the issue and await guidance.
+
+    validation:
+      commands:
+        - pnpm run typecheck
+      expected_output: "No type errors"
+      on_failure: "Check Effect.tryPromise usage and error handling"
+
+  - id: m1-005
+    name: Add unit tests for TeamsNotificationService
+    description: |
+      Create comprehensive unit tests for the Teams notification service covering
+      success scenarios, error scenarios, and adaptive card payload generation.
+    estimate_minutes: 75
+    type: test
+    dependencies: [m1-004]
+    files:
+      create:
+        - tests/services/teams-notification.test.ts
+      touch_only:
+        - src/services/teams-notification.ts
+        - tests/services/github.test.ts
+    instructions: |
+      **Objective:**
+      Create unit tests for TeamsNotificationService with mocked fetch.
+
+      **Implementation Steps:**
+      1. Create tests/services/teams-notification.test.ts
+      2. Import vitest and Effect dependencies
+      3. Create test suite structure:
+         ```typescript
+         import { describe, it, expect, vi } from "vitest";
+         import { Effect, Exit } from "effect";
+         import type { ReviewNotificationData } from "../../src/services/teams-notification.js";
+
+         // Mock fetch globally
+         const mockFetch = vi.fn();
+         global.fetch = mockFetch as any;
+
+         describe("TeamsNotificationService", () => {
+           const testData: ReviewNotificationData = {
+             prNumber: 123,
+             prTitle: "Test PR",
+             prAuthor: "testuser",
+             prUrl: "https://github.com/test/repo/pull/123",
+             reviewVerdict: "approve",
+             commentUrl: "https://github.com/test/repo/pull/123#issuecomment-456",
+             repository: "test/repo",
+           };
+
+           describe("sendReviewNotification", () => {
+             it("should send notification successfully", async () => {
+               // Setup mock response
+               mockFetch.mockResolvedValueOnce({
+                 ok: true,
+                 status: 200,
+                 statusText: "OK",
+               });
+
+               const { TeamsNotificationServiceLive } = await import(
+                 "../../src/services/teams-notification.js"
+               );
+
+               const program = Effect.gen(function* () {
+                 const service = yield* TeamsNotificationServiceLive;
+                 yield* service.sendReviewNotification(
+                   "https://webhook.url",
+                   testData
+                 );
+               });
+
+               const result = await Effect.runPromise(program);
+               expect(result).toBeUndefined();
+               expect(mockFetch).toHaveBeenCalledWith(
+                 "https://webhook.url",
+                 expect.objectContaining({
+                   method: "POST",
+                   headers: { "Content-Type": "application/json" },
+                 })
+               );
+             });
+
+             it("should handle webhook error response", async () => {
+               mockFetch.mockResolvedValueOnce({
+                 ok: false,
+                 status: 400,
+                 statusText: "Bad Request",
+               });
+
+               const { TeamsNotificationServiceLive } = await import(
+                 "../../src/services/teams-notification.js"
+               );
+
+               const program = Effect.gen(function* () {
+                 const service = yield* TeamsNotificationServiceLive;
+                 yield* service.sendReviewNotification(
+                   "https://webhook.url",
+                   testData
+                 );
+               });
+
+               const result = await Effect.runPromiseExit(program);
+               expect(Exit.isFailure(result)).toBe(true);
+               if (Exit.isFailure(result) && result.cause._tag === "Fail") {
+                 expect(result.cause.error._tag).toBe("TeamsNotificationError");
+               }
+             });
+
+             it("should handle network errors", async () => {
+               mockFetch.mockRejectedValueOnce(new Error("Network error"));
+
+               const { TeamsNotificationServiceLive } = await import(
+                 "../../src/services/teams-notification.js"
+               );
+
+               const program = Effect.gen(function* () {
+                 const service = yield* TeamsNotificationServiceLive;
+                 yield* service.sendReviewNotification(
+                   "https://webhook.url",
+                   testData
+                 );
+               });
+
+               const result = await Effect.runPromiseExit(program);
+               expect(Exit.isFailure(result)).toBe(true);
+             });
+
+             it("should use correct card styling for approve verdict", async () => {
+               mockFetch.mockResolvedValueOnce({
+                 ok: true,
+                 status: 200,
+                 statusText: "OK",
+               });
+
+               const approveData = { ...testData, reviewVerdict: "approve" as const };
+
+               const { TeamsNotificationServiceLive } = await import(
+                 "../../src/services/teams-notification.js"
+               );
+
+               const program = Effect.gen(function* () {
+                 const service = yield* TeamsNotificationServiceLive;
+                 yield* service.sendReviewNotification(
+                   "https://webhook.url",
+                   approveData
+                 );
+               });
+
+               await Effect.runPromise(program);
+
+               const callBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+               expect(callBody.attachments[0].content.body[0].text).toContain("Approved");
+               expect(callBody.attachments[0].content.body[0].color).toBe("Good");
+             });
+
+             it("should use correct card styling for request-changes verdict", async () => {
+               mockFetch.mockResolvedValueOnce({
+                 ok: true,
+                 status: 200,
+                 statusText: "OK",
+               });
+
+               const changesData = {
+                 ...testData,
+                 reviewVerdict: "request-changes" as const,
+               };
+
+               const { TeamsNotificationServiceLive } = await import(
+                 "../../src/services/teams-notification.js"
+               );
+
+               const program = Effect.gen(function* () {
+                 const service = yield* TeamsNotificationServiceLive;
+                 yield* service.sendReviewNotification(
+                   "https://webhook.url",
+                   changesData
+                 );
+               });
+
+               await Effect.runPromise(program);
+
+               const callBody = JSON.parse(mockFetch.mock.calls[0][1].body);
+               expect(callBody.attachments[0].content.body[0].text).toContain(
+                 "Changes Required"
+               );
+               expect(callBody.attachments[0].content.body[0].color).toBe("Attention");
+             });
+           });
+         });
+         ```
+
+      **Constraints:**
+      - ONLY create tests/services/teams-notification.test.ts
+      - Mock global fetch function
+      - Test success case, error responses, network errors
+      - Test all three verdict types for proper styling
+      - Use Effect.runPromiseExit for error cases
+      - Follow pattern from tests/services/github.test.ts
+
+      **TDD Checklist:**
+      - [ ] Tests cover success scenario
+      - [ ] Tests cover webhook error response
+      - [ ] Tests cover network errors
+      - [ ] Tests verify correct card styling for all verdicts
+      - [ ] All tests pass
+      - [ ] No test warnings or errors
+
+      **Validation:**
+      ```bash
+      pnpm run test tests/services/teams-notification.test.ts
+      ```
+      Expected: All tests pass
+
+      **Drift Policy:**
+      If you encounter unexpected patterns or dependencies, STOP immediately.
+      Do not fix mid-stream. Report the issue and await guidance.
+
+    validation:
+      commands:
+        - pnpm run test tests/services/teams-notification.test.ts
+      expected_output: "All tests passing"
+      on_failure: "Debug test failures and check mock setup"

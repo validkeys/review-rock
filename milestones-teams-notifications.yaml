@@ -1,0 +1,98 @@
+version: "1.0.0"
+project: review-rock-teams-notifications
+generated: 2026-04-01
+
+business_requirements: inline
+technical_requirements: inline
+
+meta:
+  ordering_strategy: single-feature-branch
+  ordering_rationale: "All milestones delivered as one complete PR with technical dependency ordering"
+
+milestones:
+  - id: m0
+    name: Configuration Schema Updates
+    description: |
+      Add Teams notification configuration to the config schema and example file.
+      This provides the foundation for all notification features by defining the
+      configuration structure for webhook URL and enable flag.
+    dependencies: []
+    estimated_duration: 30 minutes
+    tasks_file: milestone-m0.tasks.yaml
+    success_criteria:
+      - ConfigSchema includes teamsWebhookUrl (optional string)
+      - ConfigSchema includes enableTeamsNotifications (optional boolean with default false)
+      - review-rock.config.example.ts updated with Teams notification configuration
+      - TypeScript types compile without errors
+      - Existing tests still pass
+
+  - id: m1
+    name: Teams Notification Service Implementation
+    description: |
+      Create the TeamsNotificationService with full Effect-TS architecture including
+      service interface, dependency injection, error types, and adaptive card building.
+      This service will handle all Teams webhook interactions and card formatting.
+    dependencies: [m0]
+    estimated_duration: 3 hours
+    tasks_file: milestone-m1.tasks.yaml
+    success_criteria:
+      - TeamsNotificationService interface defined with sendReviewNotification method
+      - Service returns Effect types with proper error handling
+      - Adaptive Card payload builder with verdict-based styling (Approve/Request Changes/Comment)
+      - Error handling logs warnings without failing (catches and logs errors)
+      - All TypeScript types explicitly defined (no 'any' types)
+      - Service Layer implemented following Effect-TS patterns
+      - Unit tests cover success and failure scenarios
+
+  - id: m2
+    name: Review Verdict Extraction Utility
+    description: |
+      Create a utility function to parse review content and extract the verdict
+      (Approve ✅, Request Changes ❌, Comment 💬) along with PR metadata.
+      This enables dynamic card styling based on review outcome.
+    dependencies: [m1]
+    estimated_duration: 1.5 hours
+    tasks_file: milestone-m2.tasks.yaml
+    success_criteria:
+      - Function extracts verdict from review content with high accuracy
+      - Handles all three verdict types: Approve, Request Changes, Comment
+      - Returns structured data with PR number, title, author, verdict, PR URL
+      - Default verdict handling for ambiguous cases (defaults to Comment)
+      - Unit tests cover all verdict patterns and edge cases
+      - Integration with determineReviewLabel for consistency
+
+  - id: m3
+    name: Workflow Integration
+    description: |
+      Integrate TeamsNotificationService into the review workflow (orchestration/workflow.ts).
+      Notification is triggered after successfully posting the review comment to GitHub.
+      Respects configuration flags and handles errors gracefully.
+    dependencies: [m2]
+    estimated_duration: 1.5 hours
+    tasks_file: milestone-m3.tasks.yaml
+    success_criteria:
+      - TeamsNotificationService provided in workflow dependencies
+      - Notification triggered after successful review comment posting (line ~288)
+      - Configuration checked: only sends if enableTeamsNotifications is true and webhookUrl exists
+      - Notification failures are caught and logged without breaking workflow
+      - Review process completes successfully even if notification fails
+      - PR number, title, author, verdict, and comment URL passed to notification
+      - Integration tests verify notification triggered at correct point
+      - Existing workflow tests still pass
+
+  - id: m4
+    name: End-to-End Testing and Documentation
+    description: |
+      Add integration tests for the complete Teams notification flow and update
+      documentation with configuration examples and troubleshooting guidance.
+    dependencies: [m3]
+    estimated_duration: 1 hour
+    tasks_file: milestone-m4.tasks.yaml
+    success_criteria:
+      - Integration test verifies notification sent after review posting
+      - Test covers all three verdict types with correct card styling
+      - Test verifies notification is skipped when disabled
+      - Test verifies notification failure doesn't break workflow
+      - README or TROUBLESHOOTING.md updated with Teams webhook setup instructions
+      - Configuration example shows Teams notification setup
+      - All tests pass (unit and integration)

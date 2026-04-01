@@ -1,0 +1,403 @@
+milestone: m3
+name: Workflow Integration
+generated: 2026-04-01
+
+style_anchors:
+  - path: src/orchestration/workflow.ts
+    lines: 158-355
+    description: |
+      Example of processPR workflow with Effect.gen, service dependencies,
+      error handling, and multi-step orchestration. Shows proper Effect patterns.
+  - path: src/main.ts
+    lines: 96-142
+    description: |
+      Example of Layer.mergeAll for combining multiple service layers and
+      providing them to the application. Shows dependency injection setup.
+  - path: src/services/polling.ts
+    lines: 45-116
+    description: |
+      Example of makePollingServiceLayer that depends on multiple services
+      and uses them in Effect.gen workflow. Shows service composition.
+
+global_constraints:
+  allowed_patterns:
+    - "Use Effect.gen for workflow orchestration"
+    - "Provide services via Effect.provideService"
+    - "Catch and log errors with Effect.catchAll"
+    - "Use Effect.logInfo and Effect.logWarning for logging"
+    - "Check config flags before executing optional features"
+  forbidden_patterns:
+    - "Direct async/await in Effect workflows"
+    - "Throwing errors - use Effect.fail instead"
+    - "console.log - use Effect.log* instead"
+    - "Uncaught exceptions"
+  tdd_required: true
+  max_task_duration_minutes: 150
+  commit_strategy: "Commit after each task"
+
+quality_gates:
+  - stage: pre-commit
+    commands:
+      - pnpm run lint
+      - pnpm run typecheck
+      - pnpm run test
+  - stage: task-completion
+    criteria:
+      - All tests passing
+      - No lint errors
+      - No type errors
+      - Notification only sent when enabled
+      - Workflow completes on notification failure
+
+tasks:
+  - id: m3-001
+    name: Add TeamsNotificationService to workflow dependencies
+    description: |
+      Update the processPR function signature and workflow to include
+      TeamsNotificationService in the service dependencies context.
+    estimate_minutes: 30
+    type: code
+    dependencies: []
+    files:
+      modify:
+        - src/orchestration/workflow.ts
+      touch_only:
+        - src/services/teams-notification.ts
+    instructions: |
+      **Objective:**
+      Add TeamsNotificationService to the processPR workflow dependencies.
+
+      **Implementation Steps:**
+      1. Open src/orchestration/workflow.ts
+      2. Add import at the top:
+         ```typescript
+         import { TeamsNotificationService } from "../services/teams-notification.js";
+         ```
+      3. Update processPR return type (around line 158-162):
+         Change:
+         ```typescript
+         ): Effect.Effect<string, WorkflowError, GitHubService | ClassificationService | ReviewService> =>
+         ```
+         To:
+         ```typescript
+         ): Effect.Effect<
+           string,
+           WorkflowError,
+           GitHubService | ClassificationService | ReviewService | TeamsNotificationService
+         > =>
+         ```
+      4. Extract TeamsNotificationService in the Effect.gen (around line 163-166):
+         After:
+         ```typescript
+         const review = yield* ReviewService;
+         ```
+         Add:
+         ```typescript
+         const teamsNotification = yield* TeamsNotificationService;
+         ```
+      5. Keep the teamsNotification variable for use in the next task
+
+      **Constraints:**
+      - ONLY modify src/orchestration/workflow.ts
+      - Add TeamsNotificationService to return type union
+      - Extract service in Effect.gen
+      - Do NOT send notifications yet (next task)
+      - Maintain existing workflow logic
+
+      **TDD Checklist:**
+      - [ ] TeamsNotificationService imported
+      - [ ] Service added to return type union
+      - [ ] Service extracted in Effect.gen
+      - [ ] TypeScript compiles without errors
+      - [ ] Existing tests still pass
+
+      **Validation:**
+      ```bash
+      pnpm run typecheck
+      pnpm run test
+      ```
+      Expected: No type errors, all existing tests pass
+
+      **Drift Policy:**
+      If you encounter unexpected patterns or dependencies, STOP immediately.
+      Do not fix mid-stream. Report the issue and await guidance.
+
+    validation:
+      commands:
+        - pnpm run typecheck
+        - pnpm run test
+      expected_output: "No errors, all tests passing"
+      on_failure: "Check import and type union syntax"
+
+  - id: m3-002
+    name: Integrate notification after review posting
+    description: |
+      Add Teams notification sending after successfully updating the comment with
+      review content (around line 288). Respect config flags and handle errors gracefully.
+    estimate_minutes: 75
+    type: code
+    dependencies: [m3-001]
+    files:
+      modify:
+        - src/orchestration/workflow.ts
+      touch_only:
+        - src/utils/review-parser.ts
+        - src/config/schema.ts
+    instructions: |
+      **Objective:**
+      Send Teams notification after successfully posting review comment to GitHub.
+
+      **Implementation Steps:**
+      1. Open src/orchestration/workflow.ts
+      2. Add import at the top:
+         ```typescript
+         import { buildReviewNotificationData } from "../utils/review-parser.js";
+         ```
+      3. Find the line after successfully updating the comment (around line 288):
+         ```typescript
+         yield* logWithPR(Effect.logInfo(`Successfully updated comment #${commentId}`));
+         ```
+      4. Add the notification logic after this line:
+         ```typescript
+         // Step 8.5: Send Teams notification if enabled
+         if (config.enableTeamsNotifications && config.teamsWebhookUrl) {
+           yield* logWithPR(Effect.logInfo("Sending Teams notification"));
+
+           // Build comment URL (GitHub comment URL format)
+           const commentUrl = `${details.url}#issuecomment-${commentId}`;
+
+           // Build notification data
+           const notificationData = buildReviewNotificationData(
+             details,
+             reviewContent,
+             commentUrl
+           );
+           // Set repository from config
+           notificationData.repository = repo;
+
+           // Send notification - catch errors to prevent workflow failure
+           yield* teamsNotification
+             .sendReviewNotification(config.teamsWebhookUrl, notificationData)
+             .pipe(
+               Effect.catchAll((error) =>
+                 logWithPR(
+                   Effect.logWarning(
+                     `Teams notification failed (non-critical): ${String(error)}`
+                   )
+                 ).pipe(Effect.as(undefined))
+               )
+             );
+         } else {
+           yield* logWithPR(
+             Effect.logDebug("Teams notifications disabled or webhook URL not configured")
+           );
+         }
+         ```
+      5. Notification runs after comment update but before label changes
+      6. Errors are caught and logged as warnings without failing the workflow
+
+      **Constraints:**
+      - ONLY modify src/orchestration/workflow.ts
+      - Check config.enableTeamsNotifications AND config.teamsWebhookUrl
+      - Send notification after successful comment posting
+      - Use Effect.catchAll to prevent notification failures from breaking workflow
+      - Log warning on failure, debug when disabled
+      - Build comment URL using GitHub's format: {prUrl}#issuecomment-{commentId}
+      - Mutate notificationData.repository field (acceptable for this context)
+
+      **TDD Checklist:**
+      - [ ] Notification sent only when enabled AND webhook URL present
+      - [ ] Notification sent after comment update succeeds
+      - [ ] Notification errors caught and logged as warnings
+      - [ ] Workflow completes successfully even if notification fails
+      - [ ] Comment URL built correctly
+      - [ ] TypeScript compiles without errors
+
+      **Validation:**
+      ```bash
+      pnpm run typecheck
+      ```
+      Expected: No type errors
+
+      **Drift Policy:**
+      If you encounter unexpected patterns or dependencies, STOP immediately.
+      Do not fix mid-stream. Report the issue and await guidance.
+
+    validation:
+      commands:
+        - pnpm run typecheck
+      expected_output: "No type errors"
+      on_failure: "Check Effect patterns and config access"
+
+  - id: m3-003
+    name: Update PollingService to provide TeamsNotificationService
+    description: |
+      Update the PollingService layer to include TeamsNotificationService in its
+      dependencies and provide it to the processPR workflow calls.
+    estimate_minutes: 30
+    type: code
+    dependencies: [m3-002]
+    files:
+      modify:
+        - src/services/polling.ts
+      touch_only:
+        - src/orchestration/workflow.ts
+        - src/services/teams-notification.ts
+    instructions: |
+      **Objective:**
+      Update PollingService to include and provide TeamsNotificationService.
+
+      **Implementation Steps:**
+      1. Open src/services/polling.ts
+      2. Add import at the top:
+         ```typescript
+         import { TeamsNotificationService } from "./teams-notification.js";
+         ```
+      3. Update makePollingServiceLayer signature (around line 45-49):
+         Change:
+         ```typescript
+         export const makePollingServiceLayer = (config: Config): Layer.Layer<
+           PollingService,
+           never,
+           GitHubService | ClassificationService | ReviewService
+         > =>
+         ```
+         To:
+         ```typescript
+         export const makePollingServiceLayer = (
+           config: Config
+         ): Layer.Layer<
+           PollingService,
+           never,
+           GitHubService | ClassificationService | ReviewService | TeamsNotificationService
+         > =>
+         ```
+      4. Extract TeamsNotificationService in Effect.gen (around line 52-56):
+         After:
+         ```typescript
+         const review = yield* ReviewService;
+         ```
+         Add:
+         ```typescript
+         const teamsNotification = yield* TeamsNotificationService;
+         ```
+      5. Provide TeamsNotificationService to processPR (around line 86-89):
+         After:
+         ```typescript
+         Effect.provideService(ReviewService, review),
+         ```
+         Add:
+         ```typescript
+         Effect.provideService(TeamsNotificationService, teamsNotification),
+         ```
+
+      **Constraints:**
+      - ONLY modify src/services/polling.ts
+      - Add TeamsNotificationService to layer dependencies
+      - Extract service in Effect.gen
+      - Provide service to processPR calls
+      - Maintain existing structure and patterns
+
+      **TDD Checklist:**
+      - [ ] TeamsNotificationService imported
+      - [ ] Service added to layer dependencies
+      - [ ] Service extracted in Effect.gen
+      - [ ] Service provided to processPR
+      - [ ] TypeScript compiles without errors
+
+      **Validation:**
+      ```bash
+      pnpm run typecheck
+      ```
+      Expected: No type errors
+
+      **Drift Policy:**
+      If you encounter unexpected patterns or dependencies, STOP immediately.
+      Do not fix mid-stream. Report the issue and await guidance.
+
+    validation:
+      commands:
+        - pnpm run typecheck
+      expected_output: "No type errors"
+      on_failure: "Check layer dependencies and service provision"
+
+  - id: m3-004
+    name: Update main.ts to provide TeamsNotificationService layer
+    description: |
+      Add TeamsNotificationServiceLive to the ApplicationServicesLayer in main.ts
+      so it's available throughout the application.
+    estimate_minutes: 15
+    type: code
+    dependencies: [m3-003]
+    files:
+      modify:
+        - src/main.ts
+      touch_only:
+        - src/services/teams-notification.ts
+        - src/services/polling.ts
+    instructions: |
+      **Objective:**
+      Add TeamsNotificationServiceLive to the main application layers.
+
+      **Implementation Steps:**
+      1. Open src/main.ts
+      2. Add import at the top (around line 10):
+         After:
+         ```typescript
+         import { ReviewServiceLive } from "./services/review.js";
+         ```
+         Add:
+         ```typescript
+         import { TeamsNotificationServiceLive } from "./services/teams-notification.js";
+         ```
+      3. Update Layer.mergeAll in ApplicationServicesLayer (around line 115-120):
+         Change:
+         ```typescript
+         const ApplicationServicesLayer = Layer.mergeAll(
+           ReviewServiceLive,
+           ClassificationServiceLive,
+           GitHubServiceDefault,
+           RepositoryServiceLive
+         );
+         ```
+         To:
+         ```typescript
+         const ApplicationServicesLayer = Layer.mergeAll(
+           ReviewServiceLive,
+           ClassificationServiceLive,
+           GitHubServiceDefault,
+           RepositoryServiceLive,
+           TeamsNotificationServiceLive
+         );
+         ```
+
+      **Constraints:**
+      - ONLY modify src/main.ts
+      - Add TeamsNotificationServiceLive import
+      - Add to Layer.mergeAll
+      - Maintain existing layer structure
+      - No other changes needed
+
+      **TDD Checklist:**
+      - [ ] TeamsNotificationServiceLive imported
+      - [ ] Service added to Layer.mergeAll
+      - [ ] TypeScript compiles without errors
+      - [ ] Application starts without errors
+
+      **Validation:**
+      ```bash
+      pnpm run typecheck
+      pnpm run build
+      ```
+      Expected: No type errors, build succeeds
+
+      **Drift Policy:**
+      If you encounter unexpected patterns or dependencies, STOP immediately.
+      Do not fix mid-stream. Report the issue and await guidance.
+
+    validation:
+      commands:
+        - pnpm run typecheck
+        - pnpm run build
+      expected_output: "No errors, build succeeds"
+      on_failure: "Check import path and Layer.mergeAll syntax"

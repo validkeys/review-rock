@@ -1,0 +1,407 @@
+milestone: m4
+name: End-to-End Testing and Documentation
+generated: 2026-04-01
+
+style_anchors:
+  - path: tests/integration/review.integration.test.ts
+    lines: 1-50
+    description: |
+      Example of integration test structure for the review-rock project.
+      Shows how to set up integration tests with proper mocking.
+  - path: review-rock.config.example.ts
+    lines: 1-120
+    description: |
+      Example of comprehensive inline documentation with examples,
+      validation rules, and usage scenarios.
+
+global_constraints:
+  allowed_patterns:
+    - "Integration tests verify complete workflows"
+    - "Tests use proper mocking for external services"
+    - "Documentation includes setup instructions and examples"
+    - "Troubleshooting guide covers common issues"
+  forbidden_patterns:
+    - "Tests that require actual Teams webhooks"
+    - "Tests that make real API calls"
+    - "Documentation without examples"
+  tdd_required: true
+  max_task_duration_minutes: 150
+  commit_strategy: "Commit after each task"
+
+quality_gates:
+  - stage: pre-commit
+    commands:
+      - pnpm run lint
+      - pnpm run typecheck
+      - pnpm run test
+  - stage: task-completion
+    criteria:
+      - All tests passing (unit and integration)
+      - No lint errors
+      - No type errors
+      - Documentation clear and actionable
+
+tasks:
+  - id: m4-001
+    name: Add integration test for Teams notification workflow
+    description: |
+      Create an integration test that verifies the complete flow: PR processed,
+      review generated, comment posted, and Teams notification sent.
+    estimate_minutes: 60
+    type: test
+    dependencies: []
+    files:
+      create:
+        - tests/integration/teams-notification.integration.test.ts
+      touch_only:
+        - tests/integration/review.integration.test.ts
+        - src/orchestration/workflow.ts
+    instructions: |
+      **Objective:**
+      Create integration test for the complete Teams notification workflow.
+
+      **Implementation Steps:**
+      1. Create tests/integration/teams-notification.integration.test.ts
+      2. Set up test with mocked services:
+         ```typescript
+         import { describe, it, expect, vi } from "vitest";
+         import { Effect, Layer } from "effect";
+         import type { Config } from "../../src/config/schema.js";
+         import { processPR } from "../../src/orchestration/workflow.js";
+
+         // Mock fetch globally
+         const mockFetch = vi.fn();
+         global.fetch = mockFetch as any;
+
+         describe("Teams Notification Integration", () => {
+           const mockConfig: Config = {
+             repository: "test/repo",
+             pollingIntervalMinutes: 5,
+             labels: {
+               readyForReview: "ready-for-review",
+               reviewInProgress: "review-in-progress",
+               reviewRefactorRequired: "review-refactor-required",
+               reviewApproved: "review-approved",
+             },
+             frontendPaths: [],
+             skills: {
+               frontend: "test-frontend",
+               backend: "test-backend",
+               mixed: "test-mixed",
+             },
+             enableTeamsNotifications: true,
+             teamsWebhookUrl: "https://test.webhook.url",
+           };
+
+           it.todo("should send Teams notification after successful review posting");
+
+           it.todo("should skip notification when enableTeamsNotifications is false");
+
+           it.todo("should skip notification when teamsWebhookUrl is not configured");
+
+           it.todo("should not fail workflow if notification fails");
+
+           it.todo("should send correct verdict styling for approve");
+
+           it.todo("should send correct verdict styling for request-changes");
+
+           it.todo("should send correct verdict styling for comment");
+         });
+         ```
+      3. Implement the first test with full mock setup:
+         - Mock GitHubService methods (removeLabel, addLabel, postCommentWithId, updateComment, getPRDetails)
+         - Mock ClassificationService (classifyPR)
+         - Mock ReviewService (generateReview)
+         - Mock fetch for Teams webhook
+         - Verify notification is sent with correct payload
+      4. Add remaining test implementations
+      5. Tests should verify notification behavior without real external calls
+
+      **Constraints:**
+      - ONLY create tests/integration/teams-notification.integration.test.ts
+      - Mock all external services and APIs
+      - No real Teams webhook calls
+      - Test all three verdict types
+      - Test config flag combinations (enabled/disabled, URL present/absent)
+      - Test error handling (notification failure shouldn't break workflow)
+
+      **TDD Checklist:**
+      - [ ] Test verifies notification sent on success
+      - [ ] Test verifies notification skipped when disabled
+      - [ ] Test verifies notification skipped without webhook URL
+      - [ ] Test verifies workflow continues on notification failure
+      - [ ] Test verifies correct styling for all verdicts
+      - [ ] All tests pass
+      - [ ] No real external calls made
+
+      **Validation:**
+      ```bash
+      pnpm run test tests/integration/teams-notification.integration.test.ts
+      ```
+      Expected: All tests pass
+
+      **Drift Policy:**
+      If you encounter unexpected patterns or dependencies, STOP immediately.
+      Do not fix mid-stream. Report the issue and await guidance.
+
+    validation:
+      commands:
+        - pnpm run test tests/integration/teams-notification.integration.test.ts
+      expected_output: "All tests passing"
+      on_failure: "Debug test failures and check mock setup"
+
+  - id: m4-002
+    name: Update TROUBLESHOOTING.md with Teams webhook setup
+    description: |
+      Add section to TROUBLESHOOTING.md (or create if doesn't exist) with
+      Teams webhook setup instructions and common troubleshooting scenarios.
+    estimate_minutes: 30
+    type: docs
+    dependencies: []
+    files:
+      modify:
+        - TROUBLESHOOTING.md
+    instructions: |
+      **Objective:**
+      Document Teams webhook setup and troubleshooting in TROUBLESHOOTING.md.
+
+      **Implementation Steps:**
+      1. Check if TROUBLESHOOTING.md exists, if not create it
+      2. Add a new section for Teams Notifications:
+         ```markdown
+         ## Teams Notifications
+
+         ### Setup
+
+         Review Rock can send Microsoft Teams notifications when PR reviews are completed.
+
+         **Step 1: Create an Incoming Webhook in Teams**
+
+         1. Open Microsoft Teams
+         2. Navigate to the channel where you want notifications
+         3. Click the "..." menu → "Connectors"
+         4. Search for "Incoming Webhook" → Configure
+         5. Give it a name (e.g., "Review Rock")
+         6. Copy the webhook URL
+
+         **Step 2: Configure Review Rock**
+
+         Add to your `review-rock.config.ts`:
+
+         ```typescript
+         {
+           teamsWebhookUrl: "https://outlook.office.com/webhook/...",
+           enableTeamsNotifications: true,
+           // ... other config
+         }
+         ```
+
+         **Step 3: Test**
+
+         Add the "ready-for-review" label to a PR and wait for review-rock to process it.
+         You should see a notification in Teams after the review is posted.
+
+         ### Notification Format
+
+         Teams notifications use Adaptive Cards with dynamic styling:
+
+         - ✅ **Approved**: Green card with "PR Review - Approved ✅" title
+         - ❌ **Changes Required**: Red card with "PR Review - Changes Required ❌" title
+         - 💬 **Comments**: Blue card with "PR Review - Comments Posted 💬" title
+
+         Each notification includes:
+         - PR number, title, and author
+         - Repository name
+         - Links to view the PR and review comment
+         - Timestamp
+
+         ### Troubleshooting
+
+         **Notifications not appearing?**
+
+         1. Check `enableTeamsNotifications` is set to `true`
+         2. Verify `teamsWebhookUrl` is configured correctly
+         3. Test the webhook URL manually:
+            ```bash
+            curl -X POST -H "Content-Type: application/json" \
+              -d '{"text": "Test message"}' \
+              https://your-webhook-url
+            ```
+         4. Check review-rock logs for "Teams notification failed" warnings
+
+         **Workflow failing due to notification errors?**
+
+         Notification failures are logged as warnings but should NOT stop the review process.
+         If the workflow is failing, the issue is likely elsewhere. Check:
+
+         1. AWS SSO token expiry
+         2. GitHub API rate limits
+         3. Claude Code skill availability
+
+         **Webhook URL format incorrect?**
+
+         Valid Teams webhook URLs look like:
+         ```
+         https://outlook.office.com/webhook/...
+         ```
+
+         If your URL doesn't start with this, double-check you copied the correct webhook URL.
+
+         **Testing without a real webhook?**
+
+         Set `enableTeamsNotifications: false` or omit `teamsWebhookUrl` to disable notifications.
+         Review posting will work normally without trying to send notifications.
+         ```
+      3. Maintain consistent formatting with the rest of the file
+      4. Include actionable troubleshooting steps
+
+      **Constraints:**
+      - ONLY modify (or create) TROUBLESHOOTING.md
+      - Use clear, actionable language
+      - Include setup steps and troubleshooting scenarios
+      - Add code examples
+      - Format as Markdown
+
+      **TDD Checklist:**
+      - [ ] Setup instructions are clear and complete
+      - [ ] Notification format documented
+      - [ ] Common issues covered with solutions
+      - [ ] Code examples provided
+      - [ ] Markdown formatted correctly
+
+      **Validation:**
+      ```bash
+      pnpm run lint
+      ```
+      Expected: No lint errors
+
+      **Drift Policy:**
+      If you encounter unexpected patterns or dependencies, STOP immediately.
+      Do not fix mid-stream. Report the issue and await guidance.
+
+    validation:
+      commands:
+        - pnpm run lint
+      expected_output: "No errors"
+      on_failure: "Check Markdown formatting"
+
+  - id: m4-003
+    name: Update review-rock.config.example.ts with complete Teams example
+    description: |
+      Ensure the example config file has comprehensive Teams notification examples
+      and validates correctly with the updated schema (from m0-002).
+    estimate_minutes: 15
+    type: docs
+    dependencies: []
+    files:
+      modify:
+        - review-rock.config.example.ts
+      touch_only:
+        - src/config/schema.ts
+    instructions: |
+      **Objective:**
+      Verify and validate the Teams notification configuration in the example file.
+
+      **Implementation Steps:**
+      1. Open review-rock.config.example.ts
+      2. Verify the Teams configuration added in m0-002 is present and correct
+      3. Ensure the values are set appropriately:
+         ```typescript
+         teamsWebhookUrl: undefined,  // or example URL commented out
+         enableTeamsNotifications: false,  // disabled by default
+         ```
+      4. Optionally add a commented example showing enabled configuration:
+         ```typescript
+         // Example with Teams notifications enabled:
+         // teamsWebhookUrl: "https://outlook.office.com/webhook/...",
+         // enableTeamsNotifications: true,
+         ```
+      5. Validate that the config file exports valid Config type
+
+      **Constraints:**
+      - ONLY modify review-rock.config.example.ts
+      - Keep default values safe (disabled by default)
+      - Add helpful comments
+      - Ensure file remains valid TypeScript
+
+      **TDD Checklist:**
+      - [ ] Teams config present and documented
+      - [ ] Default values are safe (disabled)
+      - [ ] Example shows enabled configuration
+      - [ ] File exports valid Config type
+      - [ ] TypeScript compiles without errors
+
+      **Validation:**
+      ```bash
+      pnpm run typecheck
+      ```
+      Expected: No type errors
+
+      **Drift Policy:**
+      If you encounter unexpected patterns or dependencies, STOP immediately.
+      Do not fix mid-stream. Report the issue and await guidance.
+
+    validation:
+      commands:
+        - pnpm run typecheck
+      expected_output: "No type errors"
+      on_failure: "Check Config type compatibility"
+
+  - id: m4-004
+    name: Run full test suite and verify all tests pass
+    description: |
+      Run the complete test suite to ensure all unit tests, integration tests,
+      and existing tests pass with the new Teams notification feature.
+    estimate_minutes: 15
+    type: test
+    dependencies: [m4-001, m4-002, m4-003]
+    files:
+      touch_only:
+        - tests/**/*.test.ts
+        - src/**/*.ts
+    instructions: |
+      **Objective:**
+      Verify the complete test suite passes with all changes.
+
+      **Implementation Steps:**
+      1. Run the full test suite:
+         ```bash
+         pnpm run test
+         ```
+      2. Verify all tests pass (unit and integration)
+      3. Check test coverage if configured
+      4. Fix any failing tests before proceeding
+      5. Ensure no test warnings or errors
+
+      **Constraints:**
+      - ALL tests must pass
+      - No test warnings
+      - No console errors
+      - Fix any broken tests from integration changes
+
+      **TDD Checklist:**
+      - [ ] All unit tests pass
+      - [ ] All integration tests pass
+      - [ ] No test warnings
+      - [ ] No console errors
+      - [ ] Test coverage maintained or improved
+
+      **Validation:**
+      ```bash
+      pnpm run test
+      pnpm run lint
+      pnpm run typecheck
+      ```
+      Expected: All tests pass, no lint errors, no type errors
+
+      **Drift Policy:**
+      If you encounter unexpected patterns or dependencies, STOP immediately.
+      Do not fix mid-stream. Report the issue and await guidance.
+
+    validation:
+      commands:
+        - pnpm run test
+        - pnpm run lint
+        - pnpm run typecheck
+      expected_output: "All tests passing, no errors"
+      on_failure: "Debug failing tests and fix before proceeding"

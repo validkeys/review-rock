@@ -1,0 +1,219 @@
+milestone: m0
+name: Configuration Schema Updates
+generated: 2026-04-01
+
+style_anchors:
+  - path: src/config/schema.ts
+    lines: 1-79
+    description: |
+      Example of @effect/schema Schema.Struct pattern for configuration validation.
+      Shows how to define optional fields with defaults and validation rules.
+  - path: review-rock.config.example.ts
+    lines: 121-300
+    description: |
+      Example configuration file structure with comprehensive inline documentation.
+      Shows how to document configuration properties with JSDoc comments.
+
+global_constraints:
+  allowed_patterns:
+    - "Use @effect/schema for all schema definitions"
+    - "Use Schema.optional with default values for optional fields"
+    - "Export types derived from schemas using Schema.Schema.Type"
+    - "Add comprehensive JSDoc documentation for config properties"
+  forbidden_patterns:
+    - "Direct TypeScript interfaces without schema validation"
+    - "Type assertions on configuration values"
+    - "Runtime validation without schema definitions"
+  tdd_required: true
+  max_task_duration_minutes: 150
+  commit_strategy: "Commit after each task"
+
+quality_gates:
+  - stage: pre-commit
+    commands:
+      - pnpm run lint
+      - pnpm run typecheck
+      - pnpm run test
+  - stage: task-completion
+    criteria:
+      - All tests passing
+      - No lint errors
+      - No type errors
+      - Code formatted with Biome
+
+tasks:
+  - id: m0-001
+    name: Add Teams notification fields to ConfigSchema
+    description: |
+      Add two new optional fields to the ConfigSchema in src/config/schema.ts:
+      - teamsWebhookUrl: optional string for the Teams incoming webhook URL
+      - enableTeamsNotifications: optional boolean with default false
+    estimate_minutes: 30
+    type: code
+    dependencies: []
+    files:
+      modify:
+        - src/config/schema.ts
+      touch_only:
+        - src/services/config.ts
+    instructions: |
+      **Objective:**
+      Extend the ConfigSchema to support Teams notification configuration.
+
+      **Implementation Steps:**
+      1. Open src/config/schema.ts
+      2. Add two new optional fields to the ConfigSchema Schema.Struct:
+         ```typescript
+         /**
+          * Teams webhook URL for sending review notifications
+          *
+          * @optional
+          * @example "https://outlook.office.com/webhook/..."
+          *
+          * If provided, review-rock will send adaptive card notifications
+          * to this webhook URL when PR reviews are completed.
+          */
+          teamsWebhookUrl: Schema.optional(Schema.String),
+
+          /**
+           * Enable or disable Teams notifications
+           *
+           * @optional
+           * @default false
+           *
+           * When true, notifications are sent to the configured webhook URL.
+           * When false or undefined, no notifications are sent.
+           */
+          enableTeamsNotifications: Schema.optional(Schema.Boolean).pipe(
+            Schema.withDefault(() => false)
+          ),
+         ```
+      3. Ensure the changes maintain the existing structure
+      4. The Config type will automatically include these new fields via Schema.Schema.Type inference
+
+      **Constraints:**
+      - ONLY modify src/config/schema.ts
+      - Use Schema.optional for both fields
+      - Use Schema.withDefault for enableTeamsNotifications (default: false)
+      - Follow the existing documentation style with @optional, @default tags
+      - Do NOT modify any other files yet
+
+      **TDD Checklist:**
+      - [ ] Schema compiles without TypeScript errors
+      - [ ] Config type includes new fields with correct types
+      - [ ] Default value for enableTeamsNotifications is false
+      - [ ] teamsWebhookUrl is optional (can be undefined)
+
+      **Validation:**
+      ```bash
+      pnpm run typecheck
+      pnpm run test
+      ```
+      Expected: TypeScript compiles successfully, all existing tests pass
+
+      **Drift Policy:**
+      If you encounter unexpected patterns or dependencies, STOP immediately.
+      Do not fix mid-stream. Report the issue and await guidance.
+
+    validation:
+      commands:
+        - pnpm run typecheck
+        - pnpm run test
+      expected_output: "All tests passing, no type errors"
+      on_failure: "Check schema syntax and ensure proper Schema.optional usage"
+
+  - id: m0-002
+    name: Document Teams configuration in example file
+    description: |
+      Add comprehensive documentation and example configuration for Teams notifications
+      to review-rock.config.example.ts with usage examples and validation rules.
+    estimate_minutes: 30
+    type: docs
+    dependencies: [m0-001]
+    files:
+      modify:
+        - review-rock.config.example.ts
+    instructions: |
+      **Objective:**
+      Document the new Teams notification configuration in the example config file.
+
+      **Implementation Steps:**
+      1. Open review-rock.config.example.ts
+      2. Add the following JSDoc section after the `skills` property (around line 296):
+         ```typescript
+         /**
+          * Teams notification configuration for PR review alerts
+          *
+          * @optional
+          *
+          * Send Microsoft Teams notifications when PR reviews are completed.
+          * Uses adaptive cards with dynamic styling based on review verdict.
+          *
+          * Setup:
+          * 1. Create an Incoming Webhook in your Teams channel
+          * 2. Copy the webhook URL
+          * 3. Set teamsWebhookUrl to the webhook URL
+          * 4. Set enableTeamsNotifications to true
+          *
+          * Webhook URL format: https://outlook.office.com/webhook/...
+          *
+          * Card styling by verdict:
+          * - Approve ✅: Green card with "PR Review - Approved ✅" title
+          * - Request Changes ❌: Red card with "PR Review - Changes Required ❌" title
+          * - Comment 💬: Blue card with "PR Review - Comments Posted 💬" title
+          *
+          * Error handling:
+          * - Notification failures are logged but don't stop the review process
+          * - Review posting always completes even if notification fails
+          *
+          * Examples:
+          * ```typescript
+          * // Disabled (default)
+          * {
+          *   enableTeamsNotifications: false
+          * }
+          *
+          * // Enabled with webhook URL
+          * {
+          *   teamsWebhookUrl: "https://outlook.office.com/webhook/...",
+          *   enableTeamsNotifications: true
+          * }
+          * ```
+          */
+         teamsWebhookUrl: undefined,
+         enableTeamsNotifications: false,
+         ```
+      3. Place this documentation before the closing `};` of the config object
+      4. Maintain consistent formatting with the rest of the file
+
+      **Constraints:**
+      - ONLY modify review-rock.config.example.ts
+      - Follow the existing JSDoc documentation style
+      - Include setup instructions and examples
+      - Document error handling behavior
+      - Keep the actual config values as shown (undefined and false)
+
+      **TDD Checklist:**
+      - [ ] Documentation is clear and comprehensive
+      - [ ] Setup instructions are actionable
+      - [ ] Examples show both enabled and disabled states
+      - [ ] Error handling behavior is documented
+      - [ ] File still exports valid Config type
+
+      **Validation:**
+      ```bash
+      pnpm run typecheck
+      pnpm run lint
+      ```
+      Expected: No type errors, no lint errors, proper formatting
+
+      **Drift Policy:**
+      If you encounter unexpected patterns or dependencies, STOP immediately.
+      Do not fix mid-stream. Report the issue and await guidance.
+
+    validation:
+      commands:
+        - pnpm run typecheck
+        - pnpm run lint
+      expected_output: "No errors, proper formatting"
+      on_failure: "Check JSDoc syntax and Config type compatibility"

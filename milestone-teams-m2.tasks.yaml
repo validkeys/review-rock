@@ -1,0 +1,398 @@
+milestone: m2
+name: Review Verdict Extraction Utility
+generated: 2026-04-01
+
+style_anchors:
+  - path: src/orchestration/workflow.ts
+    lines: 109-136
+    description: |
+      Example of determineReviewLabel function that parses review content
+      to extract verdict. Shows pattern matching on review text.
+  - path: src/services/review.ts
+    lines: 103-137
+    description: |
+      Example of buildSkillGuidance function that processes strings and
+      returns structured data. Shows TypeScript type safety patterns.
+
+global_constraints:
+  allowed_patterns:
+    - "Pure functions for parsing and data extraction"
+    - "Explicit return types with no 'any'"
+    - "Pattern matching using string includes/regex"
+    - "Default values for ambiguous cases"
+  forbidden_patterns:
+    - "Type assertions (as any, as unknown)"
+    - "Mutation of input parameters"
+    - "External dependencies in utility functions"
+  tdd_required: true
+  max_task_duration_minutes: 150
+  commit_strategy: "Commit after each task"
+
+quality_gates:
+  - stage: pre-commit
+    commands:
+      - pnpm run lint
+      - pnpm run typecheck
+      - pnpm run test
+  - stage: task-completion
+    criteria:
+      - All tests passing
+      - No lint errors
+      - No type errors
+      - Code formatted with Biome
+
+tasks:
+  - id: m2-001
+    name: Create extractReviewVerdict utility function
+    description: |
+      Create a utility function that parses review content and extracts the verdict
+      (approve, request-changes, or comment) with high accuracy. Integrates with
+      existing determineReviewLabel for consistency.
+    estimate_minutes: 60
+    type: code
+    dependencies: []
+    files:
+      create:
+        - src/utils/review-parser.ts
+      touch_only:
+        - src/orchestration/workflow.ts
+    instructions: |
+      **Objective:**
+      Create a utility function to extract review verdict from review content text.
+
+      **Implementation Steps:**
+      1. Create new file: src/utils/review-parser.ts
+      2. Define the verdict type and return type:
+         ```typescript
+         /**
+          * Review verdict extracted from review content
+          */
+         export type ReviewVerdict = "approve" | "request-changes" | "comment";
+
+         /**
+          * Extracts the review verdict from review content
+          *
+          * Analyzes review text for explicit verdicts and critical issue markers.
+          * Priority order:
+          * 1. Explicit "Approve ✅" or "verdict: approve"
+          * 2. Explicit "Request Changes ❌" or "verdict: request changes"
+          * 3. Critical issues (🔴) → request-changes
+          * 4. Default → comment (safest fallback)
+          *
+          * @param reviewContent - The full review text from Claude
+          * @returns The extracted verdict
+          */
+         export const extractReviewVerdict = (reviewContent: string): ReviewVerdict => {
+           const lowerContent = reviewContent.toLowerCase();
+
+           // Check for explicit approval verdict
+           if (lowerContent.includes("approve ✅") || lowerContent.includes("verdict: approve")) {
+             return "approve";
+           }
+
+           // Check for explicit request changes verdict
+           if (
+             lowerContent.includes("request changes ❌") ||
+             lowerContent.includes("verdict: request changes")
+           ) {
+             return "request-changes";
+           }
+
+           // Check for critical issues (🔴)
+           if (lowerContent.includes("🔴") || lowerContent.includes("critical")) {
+             return "request-changes";
+           }
+
+           // Default to comment (safer than approve)
+           return "comment";
+         };
+         ```
+      3. Keep the function pure with no external dependencies
+      4. Use the same logic as determineReviewLabel from workflow.ts for consistency
+
+      **Constraints:**
+      - ONLY create src/utils/review-parser.ts
+      - Pure function with no side effects
+      - Return type explicitly defined as ReviewVerdict
+      - Case-insensitive matching using toLowerCase()
+      - Default to "comment" (safest fallback)
+      - Follow same patterns as determineReviewLabel
+
+      **TDD Checklist:**
+      - [ ] Function is pure (no side effects)
+      - [ ] Return type is ReviewVerdict
+      - [ ] Case-insensitive matching works
+      - [ ] Default to "comment" for ambiguous cases
+      - [ ] TypeScript compiles without errors
+
+      **Validation:**
+      ```bash
+      pnpm run typecheck
+      ```
+      Expected: No type errors
+
+      **Drift Policy:**
+      If you encounter unexpected patterns or dependencies, STOP immediately.
+      Do not fix mid-stream. Report the issue and await guidance.
+
+    validation:
+      commands:
+        - pnpm run typecheck
+      expected_output: "No type errors"
+      on_failure: "Check function signature and return type"
+
+  - id: m2-002
+    name: Create extractReviewMetadata helper function
+    description: |
+      Create a helper function that extracts PR metadata (number, title, author, URLs)
+      from PR details and combines with verdict to create ReviewNotificationData.
+    estimate_minutes: 45
+    type: code
+    dependencies: [m2-001]
+    files:
+      modify:
+        - src/utils/review-parser.ts
+      touch_only:
+        - src/services/github.ts
+        - src/services/teams-notification.ts
+    instructions: |
+      **Objective:**
+      Create a helper to build ReviewNotificationData from PR details and verdict.
+
+      **Implementation Steps:**
+      1. Open src/utils/review-parser.ts
+      2. Import the required types:
+         ```typescript
+         import type { PRDetails } from "../services/github.js";
+         import type { ReviewNotificationData } from "../services/teams-notification.js";
+         ```
+      3. Add the helper function:
+         ```typescript
+         /**
+          * Build ReviewNotificationData from PR details, verdict, and comment URL
+          *
+          * @param details - PR details from GitHubService
+          * @param reviewContent - The full review text
+          * @param commentUrl - URL to the posted review comment
+          * @returns Complete notification data ready for Teams
+          */
+         export const buildReviewNotificationData = (
+           details: PRDetails,
+           reviewContent: string,
+           commentUrl: string
+         ): ReviewNotificationData => {
+           const verdict = extractReviewVerdict(reviewContent);
+
+           return {
+             prNumber: details.number,
+             prTitle: details.title,
+             prAuthor: details.author,
+             prUrl: details.url,
+             reviewVerdict: verdict,
+             commentUrl,
+             repository: "", // Will be filled by caller with actual repo
+           };
+         };
+         ```
+      4. Function should extract verdict and combine with PR details
+
+      **Constraints:**
+      - ONLY modify src/utils/review-parser.ts
+      - Import types from existing services
+      - Pure function with explicit return type
+      - Call extractReviewVerdict internally
+      - Repository field left empty (caller will fill)
+      - No mutations of input parameters
+
+      **TDD Checklist:**
+      - [ ] Function returns ReviewNotificationData type
+      - [ ] Verdict extracted using extractReviewVerdict
+      - [ ] All PR details mapped correctly
+      - [ ] TypeScript compiles without errors
+      - [ ] No 'any' types
+
+      **Validation:**
+      ```bash
+      pnpm run typecheck
+      ```
+      Expected: No type errors
+
+      **Drift Policy:**
+      If you encounter unexpected patterns or dependencies, STOP immediately.
+      Do not fix mid-stream. Report the issue and await guidance.
+
+    validation:
+      commands:
+        - pnpm run typecheck
+      expected_output: "No type errors"
+      on_failure: "Check type imports and function signature"
+
+  - id: m2-003
+    name: Add unit tests for review parser utilities
+    description: |
+      Create comprehensive unit tests for extractReviewVerdict and
+      buildReviewNotificationData covering all verdict types and edge cases.
+    estimate_minutes: 45
+    type: test
+    dependencies: [m2-002]
+    files:
+      create:
+        - tests/utils/review-parser.test.ts
+      touch_only:
+        - src/utils/review-parser.ts
+    instructions: |
+      **Objective:**
+      Create unit tests for review parser utility functions.
+
+      **Implementation Steps:**
+      1. Create tests/utils/review-parser.test.ts
+      2. Import test dependencies and functions
+      3. Create test suite:
+         ```typescript
+         import { describe, it, expect } from "vitest";
+         import {
+           extractReviewVerdict,
+           buildReviewNotificationData,
+         } from "../../src/utils/review-parser.js";
+         import type { PRDetails } from "../../src/services/github.js";
+
+         describe("extractReviewVerdict", () => {
+           it("should extract approve verdict from explicit approval", () => {
+             const content = "Review looks good. Approve ✅";
+             expect(extractReviewVerdict(content)).toBe("approve");
+           });
+
+           it("should extract approve verdict from verdict line", () => {
+             const content = "Some review text\n\nVerdict: Approve";
+             expect(extractReviewVerdict(content)).toBe("approve");
+           });
+
+           it("should extract request-changes from explicit marker", () => {
+             const content = "Issues found. Request Changes ❌";
+             expect(extractReviewVerdict(content)).toBe("request-changes");
+           });
+
+           it("should extract request-changes from verdict line", () => {
+             const content = "Problems detected\n\nVerdict: Request Changes";
+             expect(extractReviewVerdict(content)).toBe("request-changes");
+           });
+
+           it("should extract request-changes when critical issues present", () => {
+             const content = "Found issues:\n🔴 Critical: Security vulnerability";
+             expect(extractReviewVerdict(content)).toBe("request-changes");
+           });
+
+           it("should default to comment for ambiguous content", () => {
+             const content = "Some general feedback without explicit verdict";
+             expect(extractReviewVerdict(content)).toBe("comment");
+           });
+
+           it("should be case-insensitive", () => {
+             const content = "APPROVE ✅";
+             expect(extractReviewVerdict(content)).toBe("approve");
+           });
+
+           it("should handle empty content", () => {
+             const content = "";
+             expect(extractReviewVerdict(content)).toBe("comment");
+           });
+         });
+
+         describe("buildReviewNotificationData", () => {
+           const mockPRDetails: PRDetails = {
+             number: 123,
+             title: "Test PR",
+             body: "PR description",
+             url: "https://github.com/test/repo/pull/123",
+             state: "open",
+             author: "testuser",
+             createdAt: "2026-01-01T00:00:00Z",
+             updatedAt: "2026-01-02T00:00:00Z",
+             labels: ["ready-for-review"],
+             files: ["src/test.ts"],
+           };
+
+           it("should build notification data with approve verdict", () => {
+             const reviewContent = "Looks good! Approve ✅";
+             const commentUrl = "https://github.com/test/repo/pull/123#comment-456";
+
+             const result = buildReviewNotificationData(
+               mockPRDetails,
+               reviewContent,
+               commentUrl
+             );
+
+             expect(result).toEqual({
+               prNumber: 123,
+               prTitle: "Test PR",
+               prAuthor: "testuser",
+               prUrl: "https://github.com/test/repo/pull/123",
+               reviewVerdict: "approve",
+               commentUrl,
+               repository: "",
+             });
+           });
+
+           it("should build notification data with request-changes verdict", () => {
+             const reviewContent = "🔴 Critical issues found";
+             const commentUrl = "https://github.com/test/repo/pull/123#comment-789";
+
+             const result = buildReviewNotificationData(
+               mockPRDetails,
+               reviewContent,
+               commentUrl
+             );
+
+             expect(result.reviewVerdict).toBe("request-changes");
+             expect(result.prNumber).toBe(123);
+           });
+
+           it("should default to comment verdict for ambiguous content", () => {
+             const reviewContent = "Some general feedback";
+             const commentUrl = "https://github.com/test/repo/pull/123#comment-111";
+
+             const result = buildReviewNotificationData(
+               mockPRDetails,
+               reviewContent,
+               commentUrl
+             );
+
+             expect(result.reviewVerdict).toBe("comment");
+           });
+         });
+         ```
+      4. Cover all verdict types and edge cases
+      5. Test case-insensitivity and defaults
+
+      **Constraints:**
+      - ONLY create tests/utils/review-parser.test.ts
+      - Test all three verdict types
+      - Test edge cases (empty content, ambiguous)
+      - Test case-insensitivity
+      - Test buildReviewNotificationData with mock data
+      - All tests must pass
+
+      **TDD Checklist:**
+      - [ ] Tests cover approve verdict extraction
+      - [ ] Tests cover request-changes verdict extraction
+      - [ ] Tests cover comment default
+      - [ ] Tests verify case-insensitivity
+      - [ ] Tests cover buildReviewNotificationData
+      - [ ] All tests pass
+      - [ ] No test warnings
+
+      **Validation:**
+      ```bash
+      pnpm run test tests/utils/review-parser.test.ts
+      ```
+      Expected: All tests pass
+
+      **Drift Policy:**
+      If you encounter unexpected patterns or dependencies, STOP immediately.
+      Do not fix mid-stream. Report the issue and await guidance.
+
+    validation:
+      commands:
+        - pnpm run test tests/utils/review-parser.test.ts
+      expected_output: "All tests passing"
+      on_failure: "Debug test failures and verify utility function logic"
