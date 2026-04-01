@@ -1,5 +1,5 @@
-import { Context, type Effect } from "effect";
-import type { TeamsNotificationError } from "../errors/teams.js";
+import { Context, Effect, Layer } from "effect";
+import { TeamsNotificationError } from "../errors/teams.js";
 
 /**
  * Review notification data for Teams
@@ -60,7 +60,7 @@ const getCardStyling = (
  * Build Microsoft Teams Adaptive Card payload
  * Reference: https://adaptivecards.io/designer/
  */
-export const buildAdaptiveCardPayload = (data: ReviewNotificationData): object => {
+const buildAdaptiveCardPayload = (data: ReviewNotificationData): object => {
   const styling = getCardStyling(data.reviewVerdict);
   const timestamp = new Date().toLocaleString("en-US", {
     year: "numeric",
@@ -135,3 +135,55 @@ export const buildAdaptiveCardPayload = (data: ReviewNotificationData): object =
     ],
   };
 };
+
+/**
+ * Send notification to Teams webhook
+ */
+const executeSendNotification = (
+  webhookUrl: string,
+  data: ReviewNotificationData
+): Effect.Effect<void, TeamsNotificationError> =>
+  Effect.gen(function* () {
+    yield* Effect.logDebug(`Sending Teams notification for PR #${data.prNumber}`);
+
+    const payload = buildAdaptiveCardPayload(data);
+
+    // Send webhook request using fetch
+    const response = yield* Effect.tryPromise({
+      try: () =>
+        fetch(webhookUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        }),
+      catch: (error) =>
+        new TeamsNotificationError({
+          message: `Failed to send Teams notification: ${String(error)}`,
+        }),
+    });
+
+    // Check response status
+    if (!response.ok) {
+      return yield* Effect.fail(
+        new TeamsNotificationError({
+          message: `Teams webhook returned error: ${response.status} ${response.statusText}`,
+          statusCode: response.status,
+        })
+      );
+    }
+
+    yield* Effect.logInfo(`✓ Teams notification sent for PR #${data.prNumber}`);
+  });
+
+/**
+ * Live implementation of TeamsNotificationService
+ */
+export const TeamsNotificationServiceLive = Layer.succeed(
+  TeamsNotificationService,
+  TeamsNotificationService.of({
+    sendReviewNotification: (webhookUrl: string, data: ReviewNotificationData) =>
+      executeSendNotification(webhookUrl, data),
+  })
+);
