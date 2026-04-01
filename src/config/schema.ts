@@ -70,6 +70,28 @@ export const ConfigSchema = Schema.Struct({
    * Skill mappings for different types of PRs
    */
   skills: SkillsSchema,
+
+  /**
+   * Teams webhook URL for sending review notifications
+   *
+   * @optional
+   * @example "https://outlook.office.com/webhook/..."
+   *
+   * If provided, review-rock will send adaptive card notifications
+   * to this webhook URL when PR reviews are completed.
+   */
+  teamsWebhookUrl: Schema.optional(Schema.String),
+
+  /**
+   * Enable or disable Teams notifications
+   *
+   * @optional
+   * @default false
+   *
+   * When true, notifications are sent to the configured webhook URL.
+   * When false or undefined, no notifications are sent.
+   */
+  enableTeamsNotifications: Schema.optionalWith(Schema.Boolean, { default: () => false }),
 });
 
 /**

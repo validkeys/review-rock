@@ -22,7 +22,10 @@ describe("ConfigSchema", () => {
     };
 
     const result = Schema.decodeUnknownSync(ConfigSchema)(validConfig);
-    expect(result).toEqual(validConfig);
+    expect(result).toEqual({
+      ...validConfig,
+      enableTeamsNotifications: false,
+    });
   });
 
   it("should fail validation for pollingIntervalMinutes <= 0", () => {
@@ -129,6 +132,9 @@ describe("ConfigSchema", () => {
     };
 
     const result = Schema.decodeUnknownSync(ConfigSchema)(minimalConfig);
-    expect(result).toEqual(minimalConfig);
+    expect(result).toEqual({
+      ...minimalConfig,
+      enableTeamsNotifications: false,
+    });
   });
 });
