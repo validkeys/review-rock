@@ -16,6 +16,8 @@ Review Rock is an intelligent pull request review automation tool that continuou
 - **Claude /review Integration**: Uses Claude's built-in `/review` command for comprehensive PR analysis
 - **Automated Outcome Determination**: Analyzes review content to determine "approved" vs "refactor-required"
 - **Real-time Status Updates**: Posts initial "analyzing..." comment, then updates with review results
+- **Automatic Retry Logic**: Intelligently retries transient failures (network issues, token expiry) without manual intervention
+- **Resilient to Interruptions**: Handles computer sleep, network outages, and AWS token expiry gracefully
 - **Error Recovery**: Automatically resets labels to "ready-for-review" on failure for retry
 - **Effect-TS Architecture**: Built with Effect for type-safe functional programming
 - **Structured Logging**: Comprehensive logging with PR number annotations using Effect Logger
@@ -180,6 +182,62 @@ Review Rock follows a label-based state machine workflow:
 10. **Error Handling**: On failure, updates comment with error, resets to `ready-for-review`
 
 Multiple instances coordinate through label swapping—only one instance successfully claims each PR.
+
+## Resilience & Error Handling
+
+Review Rock is designed to handle interruptions gracefully without requiring manual intervention.
+
+### Automatic Retry for Transient Failures
+
+**Transient errors are automatically retried:**
+- ✅ Computer sleep / network outages
+- ✅ AWS SSO token expiry
+- ✅ GitHub rate limiting
+- ✅ Command timeouts
+- ✅ Connection failures
+
+**Retry Strategy:**
+- Network operations: 5 retries with exponential backoff (5s → 10s → 20s → 40s → 80s)
+- Review generation: 10 retries with exponential backoff (10s → 20s → 40s → 80s → 160s...)
+- PR stays in `review-in-progress` during all retries
+- Only resets to `ready-for-review` after all retries exhausted
+
+### Example Scenarios
+
+**Computer Sleep:**
+```
+1. Review starts → Computer sleeps → Network drops
+2. Review Rock detects network error and retries automatically
+3. Computer wakes → Network returns
+4. Next retry succeeds → Review completes ✓
+```
+
+**AWS Token Expiry:**
+```
+1. Review generation starts → Token expires
+2. Review Rock logs: "AWS token expired. Waiting for token refresh..."
+3. Automatic retries: 10s, 20s, 40s, 80s...
+4. [You run: aws sso login]
+5. Next retry succeeds → Review completes ✓
+```
+
+**No manual restart needed** - just fix the underlying issue (refresh token, reconnect WiFi) and Review Rock continues automatically.
+
+### Permanent Errors (No Retry)
+
+These fail immediately without retries:
+- Skill not found (requires installation)
+- Invalid configuration
+- Permission denied on GitHub
+
+### Monitoring
+
+Check logs for retry attempts:
+```
+level=WARN message="AWS token expired. Waiting for token refresh..." pr=123
+level=WARN message="Transient error: ETIMEDOUT. Retrying..." pr=456
+level=INFO message="Review complete" pr=123
+```
 
 ## Troubleshooting
 

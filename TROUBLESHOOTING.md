@@ -4,6 +4,7 @@ This guide covers common issues you might encounter when running Review Rock and
 
 ## Table of Contents
 
+- [Computer Sleep / Network Interruption](#computer-sleep--network-interruption)
 - [No PRs Being Processed](#no-prs-being-processed)
 - [PR Stuck in "review-in-progress"](#pr-stuck-in-review-in-progress)
 - [Labels Not Appearing on GitHub](#labels-not-appearing-on-github)
@@ -15,6 +16,70 @@ This guide covers common issues you might encounter when running Review Rock and
 - [Command Not Found: claude](#command-not-found-claude)
 - [Permission Denied on GitHub](#permission-denied-on-github)
 - [Configuration Validation Errors](#configuration-validation-errors)
+
+---
+
+## Computer Sleep / Network Interruption
+
+### Symptom
+
+Your computer goes to sleep, network drops, or WiFi disconnects while Review Rock is running.
+
+### Automatic Handling
+
+**Review Rock automatically handles network interruptions:**
+
+✅ **No manual intervention required**
+
+The application detects network failures and automatically retries all operations:
+- Label updates
+- Comment posting
+- PR details fetching
+- Review generation
+- GitHub API calls
+
+**Retry Strategy:**
+- **Network operations**: 5 retries with exponential backoff (5s → 10s → 20s → 40s → 80s)
+- **Review generation**: 10 retries with exponential backoff (10s → 20s → 40s → 80s → 160s...)
+- **Total wait time**: Up to ~2.5 minutes for network ops, longer for reviews
+
+### What Happens
+
+**Computer Sleep Scenario:**
+```
+1. Review starts → Computer sleeps → Network drops
+2. Operation fails → Review Rock detects transient error
+3. Logs: "Transient error: ETIMEDOUT. Retrying..."
+4. Waits 5s → Retries → Still asleep → Waits 10s → Retries...
+5. Computer wakes → Network returns
+6. Next retry succeeds → Review continues ✓
+```
+
+**WiFi Dropout Scenario:**
+```
+1. Posting comment → WiFi drops
+2. Review Rock retries automatically
+3. WiFi reconnects
+4. Comment posted successfully ✓
+```
+
+**Only if network doesn't return** within retry period:
+- Comment updated with error message
+- PR label reset to "ready-for-review"
+- Will be picked up again on next poll
+
+### No Action Required
+
+Just let Review Rock run. When your computer wakes up or network returns, it will automatically continue where it left off.
+
+### Logs
+
+You'll see warnings during retries:
+```
+level=WARN message="Transient error: ETIMEDOUT. Retrying..." pr=123
+level=WARN message="Transient error: ECONNREFUSED. Retrying..." pr=123
+level=INFO message="Review generated, length: 4523 characters" pr=123
+```
 
 ---
 
@@ -140,13 +205,30 @@ Error: AWS SSO token expired
 Error: Failed to authenticate with AWS Bedrock
 ```
 
+In logs:
+```
+level=WARN message="AWS token expired. Waiting for token refresh... (will retry automatically)" pr=123
+```
+
 ### Cause
 
 AWS SSO tokens expire after a certain period (typically 1-12 hours depending on your IAM Identity Center configuration). If you're using Claude via AWS Bedrock, the `claude` CLI requires valid AWS credentials.
 
+### Automatic Handling
+
+**Review Rock automatically handles token expiry:**
+
+1. **Detects token expiry** when Claude command fails
+2. **Automatically retries** up to 10 times with exponential backoff (10s, 20s, 40s, 80s...)
+3. **Keeps PR in "review-in-progress"** state during retries
+4. **Waits for you to refresh the token** - just run `aws sso login` at your convenience
+5. **Resumes automatically** after token is refreshed
+
+**No manual intervention needed** - the PR will complete after you refresh your token.
+
 ### Solution
 
-Refresh your AWS SSO session:
+When you see the warning in logs, refresh your AWS SSO session:
 
 ```bash
 aws sso login
@@ -158,7 +240,27 @@ If you're using a specific profile:
 aws sso login --profile your-profile
 ```
 
+**The review will automatically resume** - no need to restart anything.
+
+### What Happens
+
+**Timeline:**
+```
+1. Review starts → Token expires
+2. Review Rock logs: "AWS token expired. Waiting for token refresh..."
+3. Retries every 10s, 20s, 40s, 80s, 160s... (up to 10 retries)
+4. [You run: aws sso login]
+5. Next retry succeeds → Review completes ✓
+```
+
+**Only if all retries fail** (you don't refresh within ~30 minutes):
+- Comment updated with error message
+- PR label reset to "ready-for-review"
+- Will be picked up again on next poll
+
 ### Prevention
+
+While automatic retries handle token expiry gracefully, you can extend session duration:
 
 1. **Set up longer session durations** in AWS IAM Identity Center (if you have permissions):
    - Navigate to AWS IAM Identity Center console
@@ -169,12 +271,6 @@ aws sso login --profile your-profile
    ```bash
    # Add to crontab (runs every 8 hours)
    0 */8 * * * aws sso login --profile your-profile
-   ```
-
-3. **Use AWS credentials instead of SSO** if you need longer-lived credentials (not recommended for production):
-   ```bash
-   export AWS_ACCESS_KEY_ID=your-key
-   export AWS_SECRET_ACCESS_KEY=your-secret
    ```
 
 ### Verification
