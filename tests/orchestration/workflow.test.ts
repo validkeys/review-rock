@@ -7,6 +7,7 @@ import { ClassificationService } from "../../src/services/classification.js";
 import type { PRDetails } from "../../src/services/github.js";
 import { GitHubService } from "../../src/services/github.js";
 import { ReviewService } from "../../src/services/review.js";
+import { TeamsNotificationService } from "../../src/services/teams-notification.js";
 
 // Mock implementations for testing
 const mockPRDetails: PRDetails = {
@@ -80,6 +81,10 @@ describe("Workflow Orchestration", () => {
             // Mock ReviewService
             Layer.succeed(ReviewService, {
               generateReview: () => Effect.succeed("Mock review: frontend changes look good"),
+            }),
+            // Mock TeamsNotificationService
+            Layer.succeed(TeamsNotificationService, {
+              sendReviewNotification: () => Effect.void,
             })
           )
         ),
@@ -125,6 +130,9 @@ describe("Workflow Orchestration", () => {
               }),
               Layer.succeed(ReviewService, {
                 generateReview: () => Effect.succeed("Mock review"),
+              }),
+              Layer.succeed(TeamsNotificationService, {
+                sendReviewNotification: () => Effect.void,
               })
             )
           )
@@ -177,7 +185,10 @@ describe("Workflow Orchestration", () => {
             Layer.mergeAll(
               Layer.succeed(GitHubService, gitHubService),
               Layer.succeed(ClassificationService, classificationService),
-              Layer.succeed(ReviewService, reviewService)
+              Layer.succeed(ReviewService, reviewService),
+              Layer.succeed(TeamsNotificationService, {
+                sendReviewNotification: () => Effect.void,
+              })
             )
           ),
           Effect.catchAll(() => Effect.void) // Ignore the error
@@ -234,6 +245,11 @@ describe("Workflow Orchestration", () => {
           Effect.provide(Layer.succeed(GitHubService, gitHubService)),
           Effect.provide(Layer.succeed(ClassificationService, classificationService)),
           Effect.provide(Layer.succeed(ReviewService, reviewService)),
+          Effect.provide(
+            Layer.succeed(TeamsNotificationService, {
+              sendReviewNotification: () => Effect.void,
+            })
+          ),
           Effect.catchAll(() => Effect.void) // Ignore the error
         );
 

@@ -1,5 +1,6 @@
 import { Duration, Effect, Schedule } from "effect";
 import type { Config } from "../config/schema.js";
+import { buildReviewNotificationData } from "../utils/review-parser.js";
 import type {
   GitHubCommandError,
   LabelClaimFailedError,
@@ -14,6 +15,7 @@ import { ClassificationService } from "../services/classification.js";
 import { GitHubService } from "../services/github.js";
 import type { ReviewError } from "../services/review.js";
 import { ReviewService } from "../services/review.js";
+import { TeamsNotificationService } from "../services/teams-notification.js";
 
 /**
  * Union type of all possible workflow errors
@@ -159,11 +161,16 @@ export const processPR = (
   repo: string,
   prNumber: number,
   config: Config
-): Effect.Effect<string, WorkflowError, GitHubService | ClassificationService | ReviewService> =>
+): Effect.Effect<
+  string,
+  WorkflowError,
+  GitHubService | ClassificationService | ReviewService | TeamsNotificationService
+> =>
   Effect.gen(function* () {
     const github = yield* GitHubService;
     const classification = yield* ClassificationService;
     const review = yield* ReviewService;
+    const teamsNotification = yield* TeamsNotificationService;
 
     // Add PR number to all logs in this workflow
     const logWithPR = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
@@ -286,6 +293,33 @@ export const processPR = (
         })
       );
       yield* logWithPR(Effect.logInfo(`Successfully updated comment #${commentId}`));
+
+      // Step 8.5: Send Teams notification if enabled
+      if (config.enableTeamsNotifications && config.teamsWebhookUrl) {
+        yield* logWithPR(Effect.logInfo("Sending Teams notification"));
+
+        // Build comment URL (GitHub comment URL format)
+        const commentUrl = `${details.url}#issuecomment-${commentId}`;
+
+        // Build notification data
+        const notificationData = {
+          ...buildReviewNotificationData(details, reviewContent, commentUrl),
+          repository: repo,
+        };
+
+        // Send notification - catch errors to prevent workflow failure
+        yield* teamsNotification.sendReviewNotification(config.teamsWebhookUrl, notificationData).pipe(
+          Effect.catchAll((error) =>
+            logWithPR(
+              Effect.logWarning(`Teams notification failed (non-critical): ${String(error)}`)
+            ).pipe(Effect.as(undefined))
+          )
+        );
+      } else {
+        yield* logWithPR(
+          Effect.logDebug("Teams notifications disabled or webhook URL not configured")
+        );
+      }
 
       // Step 9: Remove "review-in-progress" and add the final label
       // Retry on network failures

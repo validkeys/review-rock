@@ -10,6 +10,7 @@ import { loadConfig, makeRepositoryServiceLayer } from "./services/config.js";
 import { GitHubServiceDefault } from "./services/github.js";
 import { makePollingServiceLayer } from "./services/polling.js";
 import { ReviewServiceLive } from "./services/review.js";
+import { TeamsNotificationServiceLive } from "./services/teams-notification.js";
 
 const execAsync = promisify(exec);
 
@@ -109,7 +110,8 @@ const main = Effect.gen(function* () {
     ReviewServiceLive,
     ClassificationServiceLive,
     GitHubServiceDefault,
-    RepositoryServiceLive
+    RepositoryServiceLive,
+    TeamsNotificationServiceLive
   );
 
   /**

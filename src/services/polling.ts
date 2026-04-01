@@ -4,6 +4,7 @@ import { processPR } from "../orchestration/workflow.js";
 import { ClassificationService } from "./classification.js";
 import { GitHubService } from "./github.js";
 import { ReviewService } from "./review.js";
+import { TeamsNotificationService } from "./teams-notification.js";
 
 /**
  * PollingService provides periodic polling operations for GitHub repositories.
@@ -44,13 +45,18 @@ export const PollingService = Context.GenericTag<PollingService>("@services/Poll
  */
 export const makePollingServiceLayer = (
   config: Config
-): Layer.Layer<PollingService, never, GitHubService | ClassificationService | ReviewService> =>
+): Layer.Layer<
+  PollingService,
+  never,
+  GitHubService | ClassificationService | ReviewService | TeamsNotificationService
+> =>
   Layer.effect(
     PollingService,
     Effect.gen(function* () {
       const github = yield* GitHubService;
       const classification = yield* ClassificationService;
       const review = yield* ReviewService;
+      const teamsNotification = yield* TeamsNotificationService;
 
       return PollingService.of({
         startPolling: (repo: string) =>
@@ -83,6 +89,7 @@ export const makePollingServiceLayer = (
                   Effect.provideService(GitHubService, github),
                   Effect.provideService(ClassificationService, classification),
                   Effect.provideService(ReviewService, review),
+                  Effect.provideService(TeamsNotificationService, teamsNotification),
                   Effect.tap((reviewContent) =>
                     Effect.logInfo(
                       `Successfully reviewed, review length: ${reviewContent.length} chars`

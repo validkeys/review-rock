@@ -12,6 +12,7 @@ describe("PollingService", () => {
       const { GitHubService } = await import("../../src/services/github.js");
       const { ClassificationService } = await import("../../src/services/classification.js");
       const { ReviewService } = await import("../../src/services/review.js");
+      const { TeamsNotificationService } = await import("../../src/services/teams-notification.js");
 
       // Mock GitHubService that returns PRs with and without claim label
       const mockGitHubService = Layer.succeed(
@@ -95,6 +96,14 @@ describe("PollingService", () => {
         })
       );
 
+      // Mock TeamsNotificationService
+      const mockTeamsNotificationService = Layer.succeed(
+        TeamsNotificationService,
+        TeamsNotificationService.of({
+          sendReviewNotification: () => Effect.void,
+        })
+      );
+
       // Create test config for this test
       const config: Config = {
         repository: "owner/repo",
@@ -112,7 +121,8 @@ describe("PollingService", () => {
       const TestLayer = makePollingServiceLayer(config).pipe(
         Layer.provide(mockGitHubService),
         Layer.provide(mockClassificationService),
-        Layer.provide(mockReviewService)
+        Layer.provide(mockReviewService),
+        Layer.provide(mockTeamsNotificationService)
       );
 
       // Test that we can get the first unclaimed PR
@@ -137,6 +147,7 @@ describe("PollingService", () => {
       const { ConfigService } = await import("../../src/services/config.js");
       const { ClassificationService } = await import("../../src/services/classification.js");
       const { ReviewService } = await import("../../src/services/review.js");
+      const { TeamsNotificationService } = await import("../../src/services/teams-notification.js");
 
       let configCalled = false;
       let listPRsCalled = false;
@@ -206,6 +217,14 @@ describe("PollingService", () => {
         })
       );
 
+      // Mock TeamsNotificationService
+      const mockTeamsNotificationService = Layer.succeed(
+        TeamsNotificationService,
+        TeamsNotificationService.of({
+          sendReviewNotification: () => Effect.void,
+        })
+      );
+
       // Create test config for this test
       const config: Config = {
         repository: "owner/repo",
@@ -223,7 +242,8 @@ describe("PollingService", () => {
       const TestLayer = makePollingServiceLayer(config).pipe(
         Layer.provide(mockGitHubService),
         Layer.provide(mockClassificationService),
-        Layer.provide(mockReviewService)
+        Layer.provide(mockReviewService),
+        Layer.provide(mockTeamsNotificationService)
       );
 
       const program = Effect.gen(function* () {
@@ -241,6 +261,7 @@ describe("PollingService", () => {
       const { ConfigService } = await import("../../src/services/config.js");
       const { ClassificationService } = await import("../../src/services/classification.js");
       const { ReviewService } = await import("../../src/services/review.js");
+      const { TeamsNotificationService } = await import("../../src/services/teams-notification.js");
       const { PollingService, makePollingServiceLayer } = await import(
         "../../src/services/polling.js"
       );
@@ -318,6 +339,14 @@ describe("PollingService", () => {
         })
       );
 
+      // Mock TeamsNotificationService
+      const mockTeamsNotificationService = Layer.succeed(
+        TeamsNotificationService,
+        TeamsNotificationService.of({
+          sendReviewNotification: () => Effect.void,
+        })
+      );
+
       // Create test config for this test
       const config: Config = {
         repository: "owner/repo",
@@ -335,7 +364,8 @@ describe("PollingService", () => {
       const TestLayer = makePollingServiceLayer(config).pipe(
         Layer.provide(mockGitHubService),
         Layer.provide(mockClassificationService),
-        Layer.provide(mockReviewService)
+        Layer.provide(mockReviewService),
+        Layer.provide(mockTeamsNotificationService)
       );
 
       // Verify layer construction works
@@ -358,6 +388,7 @@ describe("PollingService", () => {
       const { ConfigService } = await import("../../src/services/config.js");
       const { ClassificationService } = await import("../../src/services/classification.js");
       const { ReviewService } = await import("../../src/services/review.js");
+      const { TeamsNotificationService } = await import("../../src/services/teams-notification.js");
 
       const processedPRs: number[] = [];
 
@@ -443,6 +474,14 @@ describe("PollingService", () => {
         })
       );
 
+      // Mock TeamsNotificationService
+      const mockTeamsNotificationService = Layer.succeed(
+        TeamsNotificationService,
+        TeamsNotificationService.of({
+          sendReviewNotification: () => Effect.void,
+        })
+      );
+
       // Create test config for this test
       const config: Config = {
         repository: "owner/repo",
@@ -460,7 +499,8 @@ describe("PollingService", () => {
       const TestLayer = makePollingServiceLayer(config).pipe(
         Layer.provide(mockGitHubService),
         Layer.provide(mockClassificationService),
-        Layer.provide(mockReviewService)
+        Layer.provide(mockReviewService),
+        Layer.provide(mockTeamsNotificationService)
       );
 
       // Can't test startPolling directly as it runs forever
@@ -483,6 +523,7 @@ describe("PollingService", () => {
       const { ConfigService } = await import("../../src/services/config.js");
       const { ClassificationService } = await import("../../src/services/classification.js");
       const { ReviewService } = await import("../../src/services/review.js");
+      const { TeamsNotificationService } = await import("../../src/services/teams-notification.js");
 
       // Mock GitHubService
       const mockGitHubService = Layer.succeed(
@@ -540,6 +581,14 @@ describe("PollingService", () => {
         })
       );
 
+      // Mock TeamsNotificationService
+      const mockTeamsNotificationService = Layer.succeed(
+        TeamsNotificationService,
+        TeamsNotificationService.of({
+          sendReviewNotification: () => Effect.void,
+        })
+      );
+
       // Create test config for this test
       const config: Config = {
         repository: "owner/repo",
@@ -557,7 +606,8 @@ describe("PollingService", () => {
       const TestLayer = makePollingServiceLayer(config).pipe(
         Layer.provide(mockGitHubService),
         Layer.provide(mockClassificationService),
-        Layer.provide(mockReviewService)
+        Layer.provide(mockReviewService),
+        Layer.provide(mockTeamsNotificationService)
       );
 
       // Verify layer construction succeeds even with failing workflow
