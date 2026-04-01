@@ -4,16 +4,130 @@ This guide covers common issues you might encounter when running Review Rock and
 
 ## Table of Contents
 
+- [No PRs Being Processed](#no-prs-being-processed)
+- [PR Stuck in "review-in-progress"](#pr-stuck-in-review-in-progress)
+- [Labels Not Appearing on GitHub](#labels-not-appearing-on-github)
 - [AWS SSO Token Expired](#aws-sso-token-expired)
 - [Skill Not Found](#skill-not-found)
 - [GitHub Rate Limit](#github-rate-limit)
-- [Multiple Instances Claiming Same PR](#multiple-instances-claiming-same-pr)
 - [Command Not Found: review-rock](#command-not-found-review-rock)
 - [Command Not Found: gh](#command-not-found-gh)
-- [Command Not Found: claudecode](#command-not-found-claudecode)
+- [Command Not Found: claude](#command-not-found-claude)
 - [Permission Denied on GitHub](#permission-denied-on-github)
 - [Configuration Validation Errors](#configuration-validation-errors)
-- [PR Not Being Reviewed](#pr-not-being-reviewed)
+
+---
+
+## No PRs Being Processed
+
+### Symptom
+
+Review Rock is running but not reviewing any PRs.
+
+### Cause
+
+PRs don't have the `ready-for-review` label (or your configured label).
+
+### Solution
+
+1. **Add the label to PRs you want reviewed**:
+   ```bash
+   gh pr edit <pr-number> --add-label "ready-for-review" --repo owner/repo
+   ```
+
+2. **Check your configuration**:
+   Verify the label name in `review-rock.config.ts`:
+   ```typescript
+   labels: {
+     readyForReview: "ready-for-review",  // Must match the label on PRs
+     // ...
+   }
+   ```
+
+3. **Check polling logs**:
+   Look for messages like:
+   ```
+   Found 0 ready PRs out of X total
+   ```
+   This confirms Review Rock is running but no PRs have the required label.
+
+### Verification
+
+List PRs with the label:
+```bash
+gh pr list --label "ready-for-review" --repo owner/repo
+```
+
+---
+
+## PR Stuck in "review-in-progress"
+
+### Symptom
+
+A PR has the `review-in-progress` label but no review comment, and Review Rock isn't retrying.
+
+### Cause
+
+The review process failed partway through (network error, Claude timeout, etc.) and the label wasn't reset.
+
+### Solution
+
+1. **Check logs** for error messages about the PR
+2. **Manually reset the label**:
+   ```bash
+   # Remove in-progress label
+   gh pr edit <pr-number> --remove-label "review-in-progress" --repo owner/repo
+
+   # Re-add ready-for-review label
+   gh pr edit <pr-number> --add-label "ready-for-review" --repo owner/repo
+   ```
+
+3. **Wait for next polling cycle** (or restart Review Rock)
+
+### Prevention
+
+Review Rock automatically resets labels on error, but if the process crashes or is forcefully killed, labels may be orphaned. Consider running Review Rock as a service with automatic restart.
+
+---
+
+## Labels Not Appearing on GitHub
+
+### Symptom
+
+Review Rock logs show labels being added/removed, but they don't appear on GitHub.
+
+### Cause
+
+1. Labels don't exist in the repository
+2. GitHub permissions issue
+3. `gh` CLI not authenticated
+
+### Solution
+
+1. **Check if labels exist**:
+   ```bash
+   gh label list --repo owner/repo | grep review
+   ```
+
+2. **Review Rock auto-creates labels on startup**. Check logs for:
+   ```
+   ✓ Created label 'ready-for-review'
+   ✓ Label 'review-in-progress' already exists
+   ```
+
+3. **Manually create labels** if needed:
+   ```bash
+   gh label create "ready-for-review" --color "0E8A16" --description "PR is ready for automated review" --repo owner/repo
+   gh label create "review-in-progress" --color "FBCA04" --description "Review is currently in progress" --repo owner/repo
+   gh label create "review-approved" --color "0E8A16" --description "Review has been approved" --repo owner/repo
+   gh label create "review-refactor-required" --color "D93F0B" --description "Review requires changes" --repo owner/repo
+   ```
+
+4. **Verify `gh` permissions**:
+   ```bash
+   gh auth status
+   ```
+   Ensure you have `repo` scope.
 
 ---
 
@@ -28,7 +142,7 @@ Error: Failed to authenticate with AWS Bedrock
 
 ### Cause
 
-AWS SSO tokens expire after a certain period (typically 1-12 hours depending on your IAM Identity Center configuration). The `claudecode` CLI requires valid AWS credentials to access Claude via AWS Bedrock.
+AWS SSO tokens expire after a certain period (typically 1-12 hours depending on your IAM Identity Center configuration). If you're using Claude via AWS Bedrock, the `claude` CLI requires valid AWS credentials.
 
 ### Solution
 
@@ -86,30 +200,31 @@ Error: Could not find skill in claudecode
 
 ### Cause
 
-The configured skill is not installed in your `claudecode` CLI. Skills must be installed before Review Rock can use them.
+The configured skill is not installed in your `claude` CLI. Skills must be installed before Review Rock can use them, or the skill name is incorrect.
 
 ### Solution
 
-Install the missing skill:
+1. **Install the missing skill**:
+   ```bash
+   claude skill add <skill-url>
+   ```
 
-```bash
-claudecode skill add <skill-url>
-```
+   For example:
+   ```bash
+   claude skill add https://github.com/anthropics/claude-code-skills/tree/main/vercel-react-best-practices
+   ```
 
-For example:
-```bash
-claudecode skill add https://github.com/anthropics/claude-code/tree/main/skills/vercel-react-best-practices
-```
+2. **Or use built-in skills** like `typescript-expert` which don't require installation
 
 ### Verification
 
 List all installed skills:
 
 ```bash
-claudecode skill list
+claude skill list
 ```
 
-Ensure all skills referenced in your `review-rock.config.ts` appear in this list.
+Ensure all skills referenced in your `review-rock.config.ts` appear in this list, or use built-in skill names.
 
 ### Common Skills
 
@@ -178,46 +293,6 @@ Check your current rate limit status:
 ```bash
 gh api rate_limit --jq '.rate'
 ```
-
----
-
-## Multiple Instances Claiming Same PR
-
-### Symptom
-
-Multiple Review Rock instances post duplicate reviews on the same PR.
-
-### Cause
-
-**Race condition** (rare): Two instances checked for claimed PRs at nearly the same time, both found the PR unclaimed, and both claimed it. This should be extremely rare due to GitHub's atomic label operations, but network timing can occasionally cause this.
-
-### Solution
-
-1. **Verify GitHub API behavior**: Check if the PR has multiple claim labels or duplicate comments
-2. **Review label operations**: Ensure all instances use the same `claimLabel` configuration
-3. **Check timestamps**: If reviews are posted milliseconds apart, it's a race condition
-
-### Mitigation
-
-1. **Add timestamp to claim label** (future enhancement):
-   ```typescript
-   {
-     claimLabel: "review-rock-claimed-<instance-id>"
-   }
-   ```
-
-2. **Increase polling interval** to reduce likelihood of simultaneous checks:
-   ```typescript
-   {
-     pollingIntervalMinutes: 10
-   }
-   ```
-
-3. **Use different claim labels** for different instances if running multiple deployments
-
-### Expected Behavior
-
-Under normal operation, GitHub's atomic label operations should prevent race conditions. If you're seeing frequent duplicates, there may be a configuration issue.
 
 ---
 
@@ -336,47 +411,41 @@ gh --version
 
 ---
 
-## Command Not Found: claudecode
+## Command Not Found: claude
 
 ### Symptom
 
 ```bash
-Error: spawn claudecode ENOENT
-Error: claudecode command not found
+Error: spawn claude ENOENT
+Error: claude command not found
 ```
 
 ### Cause
 
-Claude Code CLI (`claudecode`) is not installed. Review Rock requires `claudecode` to run Claude reviews via AWS Bedrock.
+Claude CLI (`claude`) is not installed. Review Rock requires `claude` to run Claude reviews using the `/review` command.
 
 ### Solution
 
-Install Claude Code CLI:
+Install Claude CLI:
 
 1. Visit https://claude.ai/download
-2. Download and install the Claude Code CLI for your platform
-3. Authenticate with AWS credentials:
+2. Download and install Claude for your platform
+3. Run Claude once to authenticate:
    ```bash
-   claudecode auth login
+   claude
    ```
-
-### Alternative: Manual Installation
-
-If the installer isn't available, you can install via npm (if published):
-```bash
-npm install -g @anthropic-ai/claude-code
-```
+   Follow the authentication prompts.
 
 ### Verification
 
 ```bash
-claudecode --version
-# Should output: claudecode version X.X.X
+claude --version
+# Should output: claude version X.X.X
 ```
 
-Verify AWS authentication:
+Test Claude is working:
 ```bash
-claudecode auth status
+echo "Hello" | claude
 ```
 
 ---
@@ -462,10 +531,18 @@ Check common validation rules:
    ❌ pollingIntervalMinutes: -1
    ```
 
-3. **claimLabel**: Must be non-empty string
+3. **labels**: All label fields must be non-empty strings
    ```typescript
-   ✅ claimLabel: "review-rock-claimed"
-   ❌ claimLabel: ""
+   ✅ labels: {
+     readyForReview: "ready-for-review",
+     reviewInProgress: "review-in-progress",
+     reviewRefactorRequired: "review-refactor-required",
+     reviewApproved: "review-approved"
+   }
+   ❌ labels: {
+     readyForReview: "",  // Empty string not allowed
+     // ...
+   }
    ```
 
 4. **frontendPaths**: Must be array of strings
@@ -499,81 +576,18 @@ If the configuration is valid, Review Rock will start polling.
 
 ---
 
-## PR Not Being Reviewed
-
-### Symptom
-
-Review Rock is running, but certain PRs are not being reviewed.
-
-### Possible Causes & Solutions
-
-1. **PR already claimed**:
-   - Check if the PR has the claim label (`review-rock-claimed`)
-   - Remove the label to re-trigger review:
-     ```bash
-     gh pr edit <pr-number> --remove-label "review-rock-claimed"
-     ```
-
-2. **PR is closed or merged**:
-   - Review Rock only reviews **open** PRs
-   - Verify PR status: `gh pr view <pr-number>`
-
-3. **PR is from a fork**:
-   - Forked PRs may have different permission requirements
-   - Ensure `gh` has access to the base repository
-
-4. **Polling interval**:
-   - Review Rock checks every N minutes
-   - If you just opened a PR, wait for the next polling cycle
-
-5. **Configuration mismatch**:
-   - Verify `repository` in config matches the actual repository
-   - Check environment variables aren't overriding config
-
-### Debugging
-
-Enable verbose logging:
-```bash
-DEBUG=* review-rock
-```
-
-This will show:
-- When Review Rock polls GitHub
-- Which PRs it finds
-- Which PRs it attempts to claim
-- Any errors during review
-
-### Manual Test
-
-Test if the review workflow works manually:
-```bash
-# List open PRs
-gh pr list --repo owner/repo
-
-# Add claim label
-gh pr edit <pr-number> --add-label "review-rock-claimed" --repo owner/repo
-
-# Run Claude review
-claudecode --skill typescript-expert "Review this PR"
-
-# Post comment
-gh pr comment <pr-number> --body "Review complete" --repo owner/repo
-```
-
-If any of these steps fail, that's where the issue lies.
-
----
-
 ## Getting Help
 
 If you're still experiencing issues:
 
-1. **Check the logs**: Review Rock outputs detailed logs that can help identify the problem
-2. **Verify prerequisites**: Ensure `gh`, `claudecode`, and AWS credentials are all set up correctly
-3. **Test manually**: Run the individual commands (`gh`, `claudecode`) to isolate the issue
-4. **Open an issue**: If you believe it's a bug, open an issue on the Review Rock repository with:
-   - Full error message
+1. **Check the logs**: Review Rock outputs detailed structured logs with PR numbers that help identify the problem
+2. **Verify prerequisites**: Ensure `gh` and `claude` CLIs are installed and authenticated
+3. **Check labels**: Verify PRs have the `ready-for-review` label and labels aren't stuck
+4. **Test manually**: Run individual commands (`gh pr list`, `claude`, etc.) to isolate the issue
+5. **Open an issue**: If you believe it's a bug, open an issue on the Review Rock repository with:
+   - Full error message and logs
    - Your configuration (redacted)
    - Steps to reproduce
+   - PR number if applicable
 
 For more help, see the [README](./README.md) or open an issue on GitHub.
