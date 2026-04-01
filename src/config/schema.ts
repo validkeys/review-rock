@@ -10,6 +10,35 @@ const SkillsSchema = Schema.Struct({
 });
 
 /**
+ * Label configuration for PR workflow states
+ */
+const LabelsSchema = Schema.Struct({
+  /**
+   * Label that must be present on PRs to be eligible for review
+   * Default: "ready-for-review"
+   */
+  readyForReview: Schema.String,
+
+  /**
+   * Label added when review is in progress (replaces readyForReview)
+   * Default: "review-in-progress"
+   */
+  reviewInProgress: Schema.String,
+
+  /**
+   * Label added when review determines changes are needed
+   * Default: "review-refactor-required"
+   */
+  reviewRefactorRequired: Schema.String,
+
+  /**
+   * Label added when review approves the PR
+   * Default: "review-approved"
+   */
+  reviewApproved: Schema.String,
+});
+
+/**
  * Configuration schema for Review Rock
  *
  * Defines the structure and validation rules for the application configuration.
@@ -28,9 +57,9 @@ export const ConfigSchema = Schema.Struct({
   ),
 
   /**
-   * Label to apply when claiming a PR for review
+   * Label configuration for PR workflow
    */
-  claimLabel: Schema.String,
+  labels: LabelsSchema,
 
   /**
    * Array of frontend path patterns for identifying frontend-only changes

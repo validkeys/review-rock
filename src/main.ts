@@ -14,42 +14,80 @@ import { promisify } from "util";
 const execAsync = promisify(exec);
 
 /**
- * Ensures the claim label exists in the repository
- * Creates it if it doesn't exist, handles "already exists" error gracefully
+ * Creates a single label in the repository
+ * Handles "already exists" error gracefully
  */
-const ensureLabelExists = (
+const createLabel = (
   repo: string,
-  label: string
+  label: string,
+  color: string,
+  description: string
 ): Effect.Effect<void, Error> =>
   Effect.gen(function* () {
-    yield* Effect.log(`Ensuring label '${label}' exists in repository ${repo}...`);
-
-    // Try to create the label using gh CLI
     yield* Effect.tryPromise({
       try: () =>
         execAsync(
-          `gh label create "${label}" --repo "${repo}" --color "8B5CF6" --description "PR claimed by review-rock for automated review"`
+          `gh label create "${label}" --repo "${repo}" --color "${color}" --description "${description}"`
         ),
       catch: (error) => error as Error,
     });
 
-    yield* Effect.logInfo(`✓ Created label '${label}' in repository ${repo}`);
+    yield* Effect.logInfo(`✓ Created label '${label}'`);
   }).pipe(
     Effect.catchAll((error) =>
       Effect.gen(function* () {
         // Check if error is because label already exists
         if (error.message?.includes("already exists")) {
-          yield* Effect.logInfo(`✓ Label '${label}' already exists in repository ${repo}`);
+          yield* Effect.logDebug(`Label '${label}' already exists`);
         } else {
           // Log warning but don't fail startup
           yield* Effect.logWarning(
-            `Failed to create label '${label}': ${error.message}. The tool may not be able to claim PRs properly.`
+            `Failed to create label '${label}': ${error.message}`
           );
           return yield* Effect.fail(error);
         }
       })
     )
   );
+
+/**
+ * Ensures all required workflow labels exist in the repository
+ */
+const ensureLabelsExist = (
+  repo: string,
+  labels: {
+    readyForReview: string;
+    reviewInProgress: string;
+    reviewRefactorRequired: string;
+    reviewApproved: string;
+  }
+): Effect.Effect<void, Error> =>
+  Effect.gen(function* () {
+    yield* Effect.logInfo(`Ensuring workflow labels exist in repository ${repo}...`);
+
+    // Create all labels in parallel
+    yield* Effect.all(
+      [
+        createLabel(repo, labels.readyForReview, "0E8A16", "PR is ready for automated review"),
+        createLabel(
+          repo,
+          labels.reviewInProgress,
+          "FBCA04",
+          "Review is currently in progress"
+        ),
+        createLabel(
+          repo,
+          labels.reviewRefactorRequired,
+          "D93F0B",
+          "Review requires changes before approval"
+        ),
+        createLabel(repo, labels.reviewApproved, "0E8A16", "Review has been approved"),
+      ],
+      { concurrency: "unbounded" }
+    );
+
+    yield* Effect.logInfo(`✓ All workflow labels are ready`);
+  });
 
 /**
  * Main program execution
@@ -60,8 +98,8 @@ const main = Effect.gen(function* () {
   const config = yield* Effect.promise(() => loadConfig());
   yield* Effect.logInfo(`Loaded configuration for repository: ${config.repository}`);
 
-  // Ensure the claim label exists in the repository
-  yield* ensureLabelExists(config.repository, config.claimLabel);
+  // Ensure all workflow labels exist in the repository
+  yield* ensureLabelsExist(config.repository, config.labels);
 
   // Create service layers with preloaded config
   const ClassificationServiceLive = makeClassificationServiceLayer(config);

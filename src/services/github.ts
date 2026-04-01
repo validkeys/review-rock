@@ -73,6 +73,19 @@ export interface GitHubService {
   ) => Effect.Effect<void, GitHubCommandError>;
 
   /**
+   * Add a label to a pull request
+   * @param repo - Repository in format "owner/repo"
+   * @param prNumber - Pull request number
+   * @param label - Label to add
+   * @returns Effect that resolves to void or GitHubCommandError
+   */
+  readonly addLabel: (
+    repo: string,
+    prNumber: number,
+    label: string
+  ) => Effect.Effect<void, GitHubCommandError>;
+
+  /**
    * Post a comment on a pull request
    * @param repo - Repository in format "owner/repo"
    * @param prNumber - Pull request number
@@ -280,6 +293,40 @@ const executeRemoveLabelCommand = (
         (error) =>
           new GitHubCommandError({
             command: "gh pr edit --remove-label",
+            stderr: error.message || String(error),
+            exitCode: 1,
+          })
+      )
+    );
+  });
+
+/**
+ * Helper to execute gh pr edit command to add a label to a PR
+ */
+const executeAddLabelCommand = (
+  repo: string,
+  prNumber: number,
+  label: string
+): Effect.Effect<void, GitHubCommandError, CommandExecutor.CommandExecutor> =>
+  Effect.gen(function* () {
+    // Execute gh pr edit command
+    const command = Command.make(
+      "gh",
+      "pr",
+      "edit",
+      String(prNumber),
+      "--repo",
+      repo,
+      "--add-label",
+      label
+    );
+
+    // Run command
+    yield* Command.string(command).pipe(
+      Effect.mapError(
+        (error) =>
+          new GitHubCommandError({
+            command: "gh pr edit --add-label",
             stderr: error.message || String(error),
             exitCode: 1,
           })
@@ -545,6 +592,10 @@ export const GitHubServiceLive = Layer.effect(
         ),
       removeLabel: (repo: string, prNumber: number, label: string) =>
         executeRemoveLabelCommand(repo, prNumber, label).pipe(
+          Effect.provideService(CommandExecutor.CommandExecutor, executor)
+        ),
+      addLabel: (repo: string, prNumber: number, label: string) =>
+        executeAddLabelCommand(repo, prNumber, label).pipe(
           Effect.provideService(CommandExecutor.CommandExecutor, executor)
         ),
       postComment: (repo: string, prNumber: number, comment: string) =>

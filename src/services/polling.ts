@@ -58,32 +58,32 @@ export const makePollingServiceLayer = (config: Config): Layer.Layer<
         startPolling: (repo: string) =>
           Effect.gen(function* () {
             // Use preloaded configuration
-            const { pollingIntervalMinutes, claimLabel } = config;
+            const { pollingIntervalMinutes, labels } = config;
 
           // Define the poll-once effect
           const pollOnce = Effect.gen(function* () {
             yield* Effect.logInfo(
-              `Polling ${repo} for unclaimed PRs (claim label: ${claimLabel})`
+              `Polling ${repo} for PRs with label: ${labels.readyForReview}`
             );
 
             // Get all open PRs
             const prs = yield* github.listOpenPRs(repo);
 
-            // Filter out PRs that already have the claim label
-            const unclaimedPRs = prs.filter((pr) => !pr.labels.includes(claimLabel));
+            // Filter to only PRs that have the readyForReview label
+            const readyPRs = prs.filter((pr) => pr.labels.includes(labels.readyForReview));
 
             yield* Effect.logInfo(
-              `Found ${unclaimedPRs.length} unclaimed PRs out of ${prs.length} total`
+              `Found ${readyPRs.length} ready PRs out of ${prs.length} total`
             );
 
-            // Process each unclaimed PR through the workflow
-            for (const pr of unclaimedPRs) {
+            // Process each ready PR through the workflow
+            for (const pr of readyPRs) {
               yield* Effect.logInfo(`Processing PR #${pr.number}: ${pr.title}`).pipe(
                 Effect.annotateLogs("pr", pr.number)
               );
 
               // Process PR with workflow - catch errors to prevent polling from stopping
-              yield* processPR(repo, pr.number, claimLabel, config).pipe(
+              yield* processPR(repo, pr.number, config).pipe(
                 Effect.provideService(GitHubService, github),
                 Effect.provideService(ClassificationService, classification),
                 Effect.provideService(ReviewService, review),
