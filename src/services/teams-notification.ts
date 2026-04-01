@@ -1,4 +1,4 @@
-import { Context, Effect } from "effect";
+import { Context, type Effect } from "effect";
 import type { TeamsNotificationError } from "../errors/teams.js";
 
 /**
@@ -39,3 +39,99 @@ export interface TeamsNotificationService {
 export const TeamsNotificationService = Context.GenericTag<TeamsNotificationService>(
   "@services/TeamsNotificationService"
 );
+
+/**
+ * Get card color and title based on review verdict
+ */
+const getCardStyling = (
+  verdict: ReviewNotificationData["reviewVerdict"]
+): { color: "Good" | "Attention" | "Accent"; title: string } => {
+  switch (verdict) {
+    case "approve":
+      return { color: "Good", title: "PR Review - Approved ✅" };
+    case "request-changes":
+      return { color: "Attention", title: "PR Review - Changes Required ❌" };
+    case "comment":
+      return { color: "Accent", title: "PR Review - Comments Posted 💬" };
+  }
+};
+
+/**
+ * Build Microsoft Teams Adaptive Card payload
+ * Reference: https://adaptivecards.io/designer/
+ */
+export const buildAdaptiveCardPayload = (data: ReviewNotificationData): object => {
+  const styling = getCardStyling(data.reviewVerdict);
+  const timestamp = new Date().toLocaleString("en-US", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZoneName: "short",
+  });
+
+  return {
+    type: "message",
+    attachments: [
+      {
+        contentType: "application/vnd.microsoft.card.adaptive",
+        contentUrl: data.commentUrl,
+        content: {
+          $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+          type: "AdaptiveCard",
+          version: "1.4",
+          body: [
+            {
+              type: "TextBlock",
+              text: styling.title,
+              weight: "Bolder",
+              size: "Large",
+              color: styling.color,
+            },
+            {
+              type: "TextBlock",
+              text: "Review Details",
+              weight: "Bolder",
+              size: "Medium",
+            },
+            {
+              type: "FactSet",
+              facts: [
+                {
+                  title: "PR:",
+                  value: `#${data.prNumber} - ${data.prTitle}`,
+                },
+                {
+                  title: "Author:",
+                  value: data.prAuthor,
+                },
+                {
+                  title: "Repository:",
+                  value: data.repository,
+                },
+                {
+                  title: "Date:",
+                  value: timestamp,
+                },
+              ],
+            },
+          ],
+          actions: [
+            {
+              type: "Action.OpenUrl",
+              title: "View PR",
+              url: data.prUrl,
+            },
+            {
+              type: "Action.OpenUrl",
+              title: "View Review",
+              url: data.commentUrl,
+            },
+          ],
+        },
+      },
+    ],
+  };
+};
