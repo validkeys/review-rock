@@ -5,32 +5,36 @@ import type { Config } from "./src/config/schema.js";
  *
  * Copy this file to `review-rock.config.ts` and customize for your repository.
  *
- * ## Configuration Precedence (highest to lowest)
- * 1. Configuration file (review-rock.config.ts)
- * 2. Environment variables (REVIEW_ROCK_*)
- * 3. Default values
+ * ## Label-Based Workflow
  *
- * ## Environment Variable Overrides
- * You can override any configuration option using environment variables:
+ * Review Rock uses GitHub labels to track PR review state:
  *
- * ```bash
- * export REVIEW_ROCK_REPOSITORY="owner/repo"
- * export REVIEW_ROCK_POLLING_INTERVAL="10"
- * export REVIEW_ROCK_CLAIM_LABEL="my-bot-claimed"
+ * ```
+ * ready-for-review → review-in-progress → review-approved
+ *                                       ↘ review-refactor-required
  * ```
  *
- * ## Skill Installation
- * Before using Review Rock, ensure all configured skills are installed:
+ * 1. Add "ready-for-review" label to PRs you want reviewed
+ * 2. Review Rock automatically:
+ *    - Removes "ready-for-review", adds "review-in-progress"
+ *    - Posts "🤖 analyzing..." comment
+ *    - Generates review using Claude /review command
+ *    - Analyzes review to determine outcome
+ *    - Updates comment with full review
+ *    - Removes "review-in-progress", adds final label
+ * 3. On error: Resets to "ready-for-review" for retry
+ *
+ * ## Skill Installation (Optional)
+ * Built-in skills like "typescript-expert" work without installation.
+ * For custom skills:
  *
  * ```bash
  * # Install a skill
- * claudecode skill add <skill-url>
+ * claude skill add <skill-url>
  *
  * # Verify installed skills
- * claudecode skill list
+ * claude skill list
  * ```
- *
- * For skill URLs, see: https://github.com/anthropics/claude-code/tree/main/skills
  *
  * ## Common Configuration Scenarios
  *
@@ -39,7 +43,12 @@ import type { Config } from "./src/config/schema.js";
  * {
  *   repository: "myorg/myrepo",
  *   pollingIntervalMinutes: 5,
- *   claimLabel: "review-rock-claimed",
+ *   labels: {
+ *     readyForReview: "ready-for-review",
+ *     reviewInProgress: "review-in-progress",
+ *     reviewRefactorRequired: "review-refactor-required",
+ *     reviewApproved: "review-approved"
+ *   },
  *   frontendPaths: ["src/frontend", "apps/web"],
  *   skills: {
  *     frontend: "vercel-react-best-practices",
@@ -94,13 +103,20 @@ import type { Config } from "./src/config/schema.js";
  * ## Validation Rules
  * - `repository`: Required. Must be in "owner/repo" format
  * - `pollingIntervalMinutes`: Optional (default: 5). Must be > 0
- * - `claimLabel`: Optional (default: "review-rock-claimed"). Non-empty string
+ * - `labels.*`: Optional. Each label must be a non-empty string
  * - `frontendPaths`: Optional (default: []). Array of path strings
  * - `skills.frontend`: Required. Non-empty string
  * - `skills.backend`: Required. Non-empty string
  * - `skills.mixed`: Required. Non-empty string
  *
  * Invalid configurations will fail validation at startup with clear error messages.
+ *
+ * ## Label Auto-Creation
+ * All configured labels are automatically created on startup if they don't exist.
+ * Labels are created with appropriate colors:
+ * - ready-for-review, review-approved: Green (#0E8A16)
+ * - review-in-progress: Yellow (#FBCA04)
+ * - review-refactor-required: Red (#D93F0B)
  */
 const config: Config = {
   /**
@@ -138,30 +154,40 @@ const config: Config = {
   pollingIntervalMinutes: 5,
 
   /**
-   * Label to apply when claiming a PR for review
+   * Label configuration for PR review workflow
    *
    * @optional
-   * @default "review-rock-claimed"
+   * @defaults shown below
    *
-   * This label is added atomically to PRs when Review Rock claims them for review.
-   * The label prevents multiple instances from reviewing the same PR.
+   * Labels track the PR review lifecycle:
+   * - `readyForReview`: PRs with this label are queued for review
+   * - `reviewInProgress`: Applied during active review
+   * - `reviewRefactorRequired`: Applied when review requires changes
+   * - `reviewApproved`: Applied when review finds no critical issues
    *
-   * How it works:
-   * 1. Review Rock finds unclaimed PRs (without this label)
-   * 2. Adds the claim label to mark the PR as claimed
-   * 3. Only the instance that successfully adds the label reviews the PR
+   * Workflow:
+   * 1. Add "ready-for-review" to a PR → Review Rock picks it up
+   * 2. Label swapped to "review-in-progress" → Prevents duplicate reviews
+   * 3. Review generated and analyzed → Determines outcome
+   * 4. Final label applied: "review-approved" or "review-refactor-required"
+   * 5. On error: Reset to "ready-for-review" for retry
    *
-   * Multiple instances can run safely using the same claim label—only one will
-   * successfully claim each PR due to GitHub's atomic label operations.
+   * Multiple instances coordinate via atomic label swapping—only one instance
+   * successfully removes "ready-for-review" and adds "review-in-progress".
    *
-   * Custom labels are useful when:
-   * - Running multiple Review Rock deployments for different purposes
-   * - Distinguishing between different bot instances
+   * Custom labels are useful for:
    * - Integrating with existing label workflows
+   * - Running multiple bot configurations for different purposes
+   * - Custom automation triggers based on review state
    *
-   * Environment variable: REVIEW_ROCK_CLAIM_LABEL
+   * All labels are auto-created on startup if they don't exist.
    */
-  claimLabel: "review-rock-claimed",
+  labels: {
+    readyForReview: "ready-for-review",
+    reviewInProgress: "review-in-progress",
+    reviewRefactorRequired: "review-refactor-required",
+    reviewApproved: "review-approved",
+  },
 
   /**
    * Array of frontend path patterns for identifying frontend-only changes
@@ -198,32 +224,33 @@ const config: Config = {
   /**
    * Skill mappings for different types of PRs
    *
-   * Skills determine which Claude Code skill is used for reviewing each PR type:
+   * Skills determine which Claude skill is used for reviewing each PR type:
    * - `frontend`: Used for PRs that only touch frontend paths
    * - `backend`: Used for PRs that only touch backend code
    * - `mixed`: Used for PRs that touch both frontend and backend
    *
-   * Skill names must match skills installed in your claudecode CLI.
-   * Verify installed skills: `claudecode skill list`
+   * Skill names can be:
+   * - Built-in skills (e.g., "typescript-expert") - work without installation
+   * - Custom skills - must be installed via `claude skill add <skill-url>`
+   *
+   * Verify installed skills: `claude skill list`
    *
    * Multiple skills:
    * - Comma-separated: "skill1,skill2,skill3"
-   * - All skills are applied in sequence to the review
-   * - Useful for applying multiple expertise areas (e.g., React + TypeScript)
+   * - Skills provide guidance to Claude's /review command
+   * - Useful for combining expertise areas (e.g., React + TypeScript)
    *
-   * Skill installation:
+   * Skill installation (for custom skills):
    * ```bash
-   * claudecode skill add <skill-url>
+   * claude skill add <skill-url>
    * ```
    *
    * Common skills:
+   * - typescript-expert: TypeScript type safety and patterns (built-in)
    * - vercel-react-best-practices: React/Next.js performance optimization
-   * - typescript-expert: TypeScript type safety and patterns
    * - contracted: Service-command pattern with @validkeys/contracted
    * - react-doctor: React code quality checks
    * - web-design-guidelines: UI/UX best practices
-   *
-   * For more skills, see: https://github.com/anthropics/claude-code/tree/main/skills
    */
   skills: {
     /**
